@@ -1,990 +1,459 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <title>Super Eva's Magic Bus Ride</title>
-    <style>
-        /* --- CORE STYLES --- */
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
-        body { 
-            overflow: hidden; 
-            background: #87ceeb; /* Open Sky */
-            font-family: "Comic Sans MS", "Trebuchet MS", sans-serif; 
-            touch-action: none; 
-        }
-
-        /* Neon HUD Dashboard */
-        #hud-overlay {
-            position: absolute;
-            inset: 0;
-            z-index: 100;
-            pointer-events: none;
-            display: flex;
-            justify-content: space-between;
-            padding: 20px;
-        }
-
-        .neon-panel {
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid;
-            box-shadow: 0 0 15px currentColor;
-            padding: 15px 18px;
-            border-radius: 12px;
-            min-width: 120px;
-            text-align: center;
-            font-weight: 800;
-        }
-
-        #math-panel { border-color: #00f3ff; color: #00f3ff; } /* Blue Neon */
-        #word-panel { border-color: #ff00ff; color: #ff00ff; } /* Pink Neon */
-
-        /* --- UI LAYER (The HUD) --- */
-        #ui-layer {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
-        }
-
-        /* Frosted Glass Panels */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.35);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 2px solid rgba(255, 255, 255, 0.6);
-            border-radius: 20px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
-            width: 100px;
-            transition: all 0.3s ease;
-        }
-
-        .panel-label {
-            font-weight: 900;
-            font-size: 1.2rem;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            text-shadow: 0 2px 4px rgba(255,255,255,0.8);
-        }
-
-        /* Liquid Progress Bars */
-        .bar-container {
-            width: 24px;
-            height: 150px;
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 12px;
-            position: relative;
-            overflow: hidden;
-            border: 2px solid rgba(255, 255, 255, 0.8);
-        }
-
-        .liquid {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 0%; /* Dynamic Height */
-            transition: height 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        /* Left Panel (Letters) */
-        #panel-left { color: #d63384; }
-        #bar-left .liquid { background: linear-gradient(to top, #d63384, #ff6fae); }
-
-        /* Right Panel (Numbers) */
-        #panel-right { color: #198754; opacity: 0.5; /* Dimmed until unlocked */ }
-        #bar-right .liquid { background: linear-gradient(to top, #198754, #20c997); }
-
-        /* --- CENTER STARS (The Targets) --- */
-        #top-center {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            pointer-events: none;
-            z-index: 21;
-        }
-
-        .star-box {
-            position: relative;
-            width: min(240px, 45vw);
-            height: min(240px, 45vw);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: float 3s ease-in-out infinite;
-        }
-
-        .star-shape {
-            position: absolute;
-            font-size: min(240px, 45vw);
-            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.2));
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        
-        .star-content {
-            position: relative;
-            z-index: 2;
-            font-size: 2.5rem;
-            font-weight: 900;
-            color: white;
-            text-shadow: 2px 2px 0px rgba(0,0,0,0.3);
-            text-align: center;
-            line-height: 1;
-        }
-
-        .star-sub {
-            position: absolute;
-            bottom: -18px;
-            font-size: 0.85rem;
-            font-weight: 800;
-            color: #5c3d00;
-            background: rgba(255, 255, 255, 0.75);
-            padding: 4px 10px;
-            border-radius: 12px;
-            border: 2px solid rgba(255, 255, 255, 0.9);
-            box-shadow: 0 6px 16px rgba(31, 38, 135, 0.1);
-        }
-
-        /* Left Star (Yellow/Gold) */
-        #star-left .star-shape { color: #ffc107; -webkit-text-stroke: 6px #b8860b; }
-        
-        /* Right Star (Orange) */
-        #star-right .star-shape { color: #fd7e14; -webkit-text-stroke: 6px #c2410c; }
-        #star-right { display: none; /* Hidden until Eva is found */ }
-
-        /* --- SPLASH SCREEN --- */
-        #splash-screen {
-            position: fixed; inset: 0; z-index: 100;
-            background: url("splash.png") center center / cover no-repeat;
-            background-color: #87ceeb; /* Fallback */
-            display: flex; align-items: center; justify-content: center;
-        }
-        #start-btn {
-            padding: 20px 50px; font-size: 2rem; font-weight: 900;
-            color: #5c3d00; background: #ffe44d; border: 4px solid #fff;
-            border-radius: 50px; cursor: pointer;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            animation: pulse 1.5s infinite;
-        }
-
-        /* Animations */
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
-        @keyframes popIn { 0% { transform: scale(0); } 80% { transform: scale(1.2); } 100% { transform: scale(1); } }
-        @keyframes sparkle {
-            0% { transform: translate(0, 0) scale(0.2); opacity: 1; }
-            100% { transform: translate(var(--spark-x), var(--spark-y)) scale(1); opacity: 0; }
-        }
-        @keyframes popupFloat {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            20% { transform: translate(-50%, -60%) scale(1.2); opacity: 1; }
-            100% { transform: translate(-50%, -120%) scale(0.6); opacity: 0; }
-        }
-        
-        .pop-anim { animation: popIn 0.4s forwards; }
-        .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
-        @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-6px, 0, 0); } 40%, 60% { transform: translate3d(6px, 0, 0); } }
-
-        canvas { display: block; position: absolute; inset: 0; z-index: 5; }
-        #bottom-ui {
-            position: absolute;
-            bottom: 10px;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
-        #word-bank {
-            padding: 10px 16px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.6);
-            border: 2px solid rgba(255, 255, 255, 0.9);
-            font-weight: 800;
-            color: #6b4fc7;
-            text-align: center;
-            box-shadow: 0 8px 20px rgba(31, 38, 135, 0.1);
-        }
-
-        #word-bank .bank-title {
-            display: block;
-            font-size: 0.9rem;
-            color: #d63384;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-        }
-
-        #word-bank .bank-word {
-            display: inline-block;
-            margin: 0 6px;
-            padding: 4px 10px;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.7);
-        }
-
-        #word-bank .bank-word.active {
-            background: #ffe44d;
-            color: #5c3d00;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-
-        #number-bank-list {
-            margin-top: 6px;
-        }
-
-        #letter-bank-list {
-            margin-top: 6px;
-        }
-
-        #number-bank-list .bank-word {
-            background: rgba(255, 255, 255, 0.8);
-            color: #198754;
-        }
-
-        #letter-bank-list .bank-word {
-            background: rgba(255, 255, 255, 0.85);
-            color: #6b4fc7;
-        }
-
-        #helper { text-align: center; color: #666; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
-
-    <div id="splash-screen">
-        <button id="start-btn">START GAME</button>
-    </div>
-
-    <div id="hud-overlay">
-        <div id="math-panel" class="neon-panel">
-            <div>Math Score</div>
-            <div id="math-score">0</div>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+        <title>Super Eva's Magic Bus Ride</title>
+        <style>
+            /* --- CORE STYLES --- */
+            * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+            body {
+                overflow: hidden;
+                background: #87ceeb; /* Open Sky */
+                font-family: "Comic Sans MS", "Trebuchet MS", sans-serif;
+                touch-action: none;
+            }
+    
+            /* --- HUD & LAYOUT --- */
+            #hud-overlay {
+                position: absolute; inset: 0; pointer-events: none; z-index: 10;
+                display: flex; justify-content: space-between; padding: 20px;
+            }
+    
+            /* Side Panels (Progress) */
+            .glass-panel {
+                background: rgba(255, 255, 255, 0.25);
+                backdrop-filter: blur(4px);
+                border: 2px solid rgba(255, 255, 255, 0.5);
+                border-radius: 20px;
+                padding: 10px;
+                width: 90px;
+                display: flex; flex-direction: column; align-items: center;
+            }
+            .panel-label { font-weight: 900; font-size: 1rem; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.3); margin-bottom: 8px; }
+            
+            .bar-container {
+                width: 20px; height: 120px; background: rgba(0,0,0,0.1);
+                border-radius: 10px; position: relative; overflow: hidden; border: 2px solid rgba(255,255,255,0.6);
+            }
+            .liquid { position: absolute; bottom: 0; left: 0; width: 100%; transition: height 0.5s ease; }
+            #bar-left .liquid { background: #d63384; } /* Pink */
+            #bar-right .liquid { background: #198754; } /* Green */
+    
+            /* --- CENTER GOAL STARS (The Mission) --- */
+            #top-center {
+                position: absolute; top: 10px; width: 100%;
+                display: flex; justify-content: center; gap: 40px;
+                pointer-events: none; z-index: 20;
+            }
+            
+            .star-goal {
+                position: relative; width: 160px; height: 160px;
+                display: flex; align-items: center; justify-content: center;
+                animation: float 4s ease-in-out infinite;
+            }
+            
+            .star-bg {
+                position: absolute; font-size: 180px; line-height: 0;
+                filter: drop-shadow(0 10px 20px rgba(0,0,0,0.2));
+            }
+            
+            /* Left Star: Spelling (Gold) */
+            #star-left .star-bg { color: #ffc107; -webkit-text-stroke: 4px #b8860b; }
+            /* Right Star: Math (Orange) - Hidden initially */
+            #star-right { display: none; opacity: 0; transition: opacity 1s; }
+            #star-right .star-bg { color: #fd7e14; -webkit-text-stroke: 4px #c2410c; }
+    
+            .star-content {
+                position: relative; z-index: 2;
+                font-size: 2.2rem; font-weight: 900; color: #fff;
+                text-shadow: 2px 2px 0 #000;
+                text-align: center;
+            }
+            
+            .progress-sub {
+                position: absolute; bottom: -20px;
+                background: #fff; color: #333;
+                padding: 4px 12px; border-radius: 12px;
+                font-size: 1rem; font-weight: 800;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            }
+    
+            /* --- BOTTOM HELPER --- */
+            #bottom-ui {
+                position: absolute; bottom: 20px; width: 100%;
+                text-align: center; pointer-events: none; z-index: 20;
+            }
+            #helper-text {
+                font-size: 1.2rem; color: #fff; font-weight: bold;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+                background: rgba(0,0,0,0.2); padding: 8px 16px; border-radius: 20px;
+                display: inline-block;
+            }
+    
+            /* --- SPLASH SCREEN --- */
+            #splash {
+                position: fixed; inset: 0; background: #87ceeb; z-index: 100;
+                display: flex; align-items: center; justify-content: center; flex-direction: column;
+            }
+            #start-btn {
+                padding: 20px 60px; font-size: 2rem; font-weight: 900;
+                background: #ffe44d; border: 5px solid #fff; border-radius: 50px;
+                color: #5c3d00; cursor: pointer; animation: pulse 1.5s infinite;
+            }
+    
+            /* ANIMATIONS */
+            @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+            @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+            @keyframes pop { 0% { transform: scale(0); opacity: 0; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+            .pop-anim { animation: pop 0.4s forwards; }
+    
+            canvas { display: block; position: absolute; inset: 0; z-index: 1; }
+        </style>
+    </head>
+    <body>
+    
+        <!-- START SCREEN -->
+        <div id="splash">
+            <button id="start-btn">PLAY!</button>
         </div>
-        <div id="word-panel" class="neon-panel">
-            <div>Word Score</div>
-            <div id="word-score">0</div>
-        </div>
-    </div>
-
-    <div id="hud-overlay">
-        <div id="math-panel" class="neon-panel">
-            <div>Math Score</div>
-            <div id="math-score">0</div>
-        </div>
-        <div id="word-panel" class="neon-panel">
-            <div>Word Score</div>
-            <div id="word-score">0</div>
-        </div>
-    </div>
-
-    <div id="hud-overlay">
-        <div id="math-panel" class="neon-panel">
-            <div>Math Score</div>
-            <div id="math-score">0</div>
-        </div>
-        <div id="word-panel" class="neon-panel">
-            <div>Word Score</div>
-            <div id="word-score">0</div>
-        </div>
-    </div>
-
-    <div id="hud-overlay">
-        <div id="math-panel" class="neon-panel">
-            <div>Math Score</div>
-            <div id="math-score">0</div>
-        </div>
-        <div id="word-panel" class="neon-panel">
-            <div>Word Score</div>
-            <div id="word-score">0</div>
-        </div>
-    </div>
-
-    <div id="hud-overlay">
-        <div id="math-panel" class="neon-panel">
-            <div>Math Score</div>
-            <div id="math-score">0</div>
-        </div>
-        <div id="word-panel" class="neon-panel">
-            <div>Word Score</div>
-            <div id="word-score">0</div>
-        </div>
-    </div>
-
-    <div id="hud-overlay">
-        <div id="math-panel" class="neon-panel">
-            <div>Math Score</div>
-            <div id="math-score">0</div>
-        </div>
-        <div id="word-panel" class="neon-panel">
-            <div>Word Score</div>
-            <div id="word-score">0</div>
-        </div>
-    </div>
-
-    <div id="top-center">
-        <div id="star-left" class="star-box">
-            <div class="star-shape">★</div>
-            <div class="star-content" id="target-word">EVA</div>
-            <div class="star-sub" id="word-progress"></div>
-        </div>
-        <div id="star-right" class="star-box">
-            <div class="star-shape">★</div>
-            <div class="star-content" id="target-num">25</div>
-            <div class="star-sub" id="number-progress"></div>
-        </div>
-    </div>
-
-    <div id="ui-layer">
-        <div style="display:flex; justify-content:space-between; width:100%;">
-            <div id="panel-left" class="glass-panel">
-                <div class="panel-label">Letters</div>
+    
+        <!-- MAIN HUD -->
+        <div id="hud-overlay">
+            <!-- Left Panel: Letters -->
+            <div class="glass-panel" id="panel-left">
+                <div class="panel-label">ABC</div>
                 <div class="bar-container"><div id="bar-left" class="liquid"></div></div>
             </div>
-
-            <div id="panel-right" class="glass-panel">
-                <div class="panel-label">Numbers</div>
+    
+            <!-- Right Panel: Numbers -->
+            <div class="glass-panel" id="panel-right" style="opacity: 0.5;">
+                <div class="panel-label">123</div>
                 <div class="bar-container"><div id="bar-right" class="liquid"></div></div>
             </div>
         </div>
-        <div id="bottom-ui">
-            <div id="word-bank">
-                <span class="bank-title">Word Bank · <span id="level-indicator">Level 1</span></span>
-                <div id="word-bank-list"></div>
-                <div id="letter-bank-list"></div>
-                <div id="number-bank-list"></div>
+    
+        <!-- GOAL STARS -->
+        <div id="top-center">
+            <!-- Spelling Goal -->
+            <div id="star-left" class="star-goal">
+                <div class="star-bg">★</div>
+                <div class="star-content" id="goal-word">EVA</div>
+                <div class="progress-sub" id="word-sub">_ _ _</div>
             </div>
-            <div id="helper">Tap the bubbles in order!</div>
+    
+            <!-- Math Goal (Hidden until unlocked) -->
+            <div id="star-right" class="star-goal">
+                <div class="star-bg">★</div>
+                <div class="star-content" id="goal-sum">5</div>
+                <div class="progress-sub" id="sum-sub">0</div>
+            </div>
         </div>
-    </div>
-
-    <canvas id="webgl"></canvas>
-    <div id="magic-layer"></div>
-
-    <script src="three.min.js"></script>
-    <script>
-        // --- GAME STATE ---
-        const state = {
-            playing: false,
-            level: 1,
-            levelProgress: 0,
-            levelLetters: 0,
-            levelNumbers: 0,
-            targetWord: "EVA", // First Word ALWAYS
-            targetNum: "25",
-            wordIndex: 0, // Current letter progress (0 = needs first letter)
-            numberSum: 0,
-            numbersUnlocked: false,
-            wordList: ["IAN", "ASA", "MAMA", "POP", "ART", "CAT", "DOG", "BUS"], // Pool after EVA
-            numberList: ["5", "10", "15", "20", "25", "50", "100"],
-            numberPool: ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
-            letterPool: []
-        };
-
-        const recentLetters = [];
-        const recentNumbers = [];
-
-        const levelConfigs = [
-            { id: 1, goal: 3, bubbleCount: 14, speedZ: 0.028, speedY: 0.002, wobble: 0.004 },
-            { id: 2, goal: 4, bubbleCount: 18, speedZ: 0.038, speedY: 0.004, wobble: 0.005 },
-            { id: 3, goal: 5, bubbleCount: 22, speedZ: 0.048, speedY: 0.006, wobble: 0.006 }
-        ];
-
-        // --- AUDIO ---
-        const audio = {
-            bg: new Audio('loop.mp3'),
-            theme: new Audio('eva_theme.mp3'),
-            pop: new Audio('pop.mp3'),
-            magic: new Audio('magic.mp3')
-        };
-        const bgBaseVolume = 0.4;
-        audio.bg.loop = true;
-        audio.bg.volume = bgBaseVolume;
-        audio.theme.volume = 1.0; 
-
-        // --- THREE.JS SETUP ---
-        let scene, camera, renderer, busGroup, wandTip;
-        const bubbles = [];
-        const particles = [];
-        const clouds = [];
-        let bubbleLabels = "E V A I N S M O P 1 2 3 4 5".split(" "); // Initial pool
-        let lastTapPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-
-        function init() {
-            if (!window.THREE) {
-                console.error('Three.js failed to load.');
-                return;
-            }
-            state.letterPool = buildLetterPool();
-            // Scene
-            const canvas = document.querySelector('#webgl');
-            renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-            scene = new THREE.Scene();
-            // Gradient Sky Mesh
-            const skyGeo = new THREE.SphereGeometry(40, 32, 32);
-            const skyMat = new THREE.MeshBasicMaterial({ color: 0x87ceeb, side: THREE.BackSide }); 
-            scene.add(new THREE.Mesh(skyGeo, skyMat));
-
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-            camera.position.set(0, 0, 5);
-
-            // Lights
-            const ambient = new THREE.AmbientLight(0xffffff, 0.8);
-            scene.add(ambient);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-            dirLight.position.set(5, 10, 7);
-            scene.add(dirLight);
-
-            // The Bus & Eva
-            busGroup = new THREE.Group();
-            scene.add(busGroup);
-
-            // Eva Sprite
-            const loader = new THREE.TextureLoader();
-            loader.load(
-                'eva.png',
-                (tex) => {
-                    const mat = new THREE.SpriteMaterial({ map: tex });
-                    const sprite = new THREE.Sprite(mat);
-                    sprite.scale.set(1.5, 1.5, 1);
-                    busGroup.add(sprite);
-                },
-                undefined,
-                () => {
-                    console.warn('Eva sprite failed to load: eva.png');
-                }
-            );
-
-            // Wand Tip (Invisible target for sparkles)
-            wandTip = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshBasicMaterial({ visible: false }));
-            wandTip.position.set(0.5, 0.5, 0);
-            busGroup.add(wandTip);
-
-            // Initial Bubbles
-            applyLevelConfig();
-            createClouds();
-
-            // Events
-            window.addEventListener('resize', onResize);
-            window.addEventListener('pointerdown', onTap);
-            const splash = document.getElementById('splash-screen');
-            const startBtn = document.getElementById('start-btn');
-            if (splash) {
-                splash.addEventListener('click', startGame, { once: true });
-                splash.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    startGame();
-                }, { once: true });
-            }
-            if (startBtn) {
-                startBtn.addEventListener('click', startGame, { once: true });
-                startBtn.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    startGame();
-                }, { once: true });
-            }
-            
-            animate();
-        }
-
-        function spawnBubble(recycleBubble = null) {
-            const bubble = recycleBubble || new THREE.Mesh(
-                new THREE.SphereGeometry(0.4, 32, 32),
-                new THREE.MeshStandardMaterial({
-                    color: 0xffffff, roughness: 0.1, metalness: 0.1,
-                    transparent: true, opacity: 0.6
-                })
-            );
-
-            // Pick a label
-            // Hint Logic: If we need "E", spawn more "E"s
-            let char;
-            if (Math.random() < 0.35) {
-                // Spawn what we need for the word
-                char = state.targetWord[state.wordIndex];
-            } else if (state.numbersUnlocked && Math.random() < 0.4) {
-                 // 40% chance for number
-                char = state.numberPool[Math.floor(Math.random() * state.numberPool.length)];
-            } else {
-                // Random letter from the word pool
-                const pool = state.letterPool.length ? state.letterPool : ["E", "V", "A"];
-                char = pool[Math.floor(Math.random() * pool.length)];
-            }
-
-            // Create Text Sprite
-            if (bubble.userData.sprite) bubble.remove(bubble.userData.sprite);
-            const canvas = document.createElement('canvas');
-            canvas.width = 128; canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            ctx.font = "bold 80px Comic Sans MS";
-            ctx.fillStyle = "#6b4fc7";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(char, 64, 64);
-            const tex = new THREE.CanvasTexture(canvas);
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
-            sprite.scale.set(0.6, 0.6, 1);
-            bubble.add(sprite);
-            
-            // Random Position (float toward Eva)
-            const x = (Math.random() - 0.5) * 7;
-            const y = (Math.random() - 0.5) * 4;
-            const z = -6 - Math.random() * 4;
-            bubble.position.set(x, y, z);
-            
-            const config = getLevelConfig();
-            bubble.userData = { 
-                label: char, 
-                sprite: sprite, 
-                speedZ: config.speedZ + Math.random() * 0.02,
-                speedY: config.speedY + Math.random() * 0.01,
-                wobble: Math.random() * Math.PI,
-                wobbleSpeed: 0.6 + Math.random() * 0.6
-            };
-
-            if (!recycleBubble) {
-                scene.add(bubble);
-                bubbles.push(bubble);
-            }
-        }
-
-        function startGame() {
-            if (state.playing) return;
-            const splash = document.getElementById('splash-screen');
-            const hud = document.getElementById('hud-overlay');
-            const startBtn = document.getElementById('start-btn');
-            if (splash) splash.style.display = 'none';
-            if (hud) {
-                hud.style.display = 'flex';
-                hud.style.zIndex = '100';
-            }
-            if (startBtn) {
-                startBtn.removeEventListener('click', startGame);
-            }
-            state.playing = true;
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            }
-            audio.bg.play().catch(e => console.log("Audio needs interaction"));
-            updateHUD();
-        }
-
-        function onTap(e) {
-            if (!state.playing) return;
-            lastTapPosition = { x: e.clientX, y: e.clientY };
-            
-            // Raycast
-            const mouse = new THREE.Vector2();
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(mouse, camera);
-            
-            const intersects = raycaster.intersectObjects(bubbles);
-            if (intersects.length > 0) {
-                const hit = intersects[0].object;
-                popBubble(hit, lastTapPosition);
-            }
-        }
-
-        function popBubble(bubble, tapPosition) {
-            const char = bubble.userData.label;
-            
-            // 1. Play Sound
-            audio.pop.currentTime = 0;
-            audio.pop.play();
-            audio.magic.currentTime = 0;
-            audio.magic.play();
-            createMagicBurst(tapPosition.x, tapPosition.y, char);
-
-            // 2. Logic Check
-            let correct = false;
-            const numberValue = parseInt(char, 10);
-
-            if (state.numbersUnlocked && !Number.isNaN(numberValue)) {
-                // Number Logic: Add up to the target
-                state.numberSum += numberValue;
-                correct = true;
-                trackSequence(recentNumbers, numberValue, true);
-
-                if (state.numberSum > Number(state.targetNum)) {
-                    state.numberSum = 0;
-                    const numEl = document.getElementById('target-num');
-                    numEl.classList.add('shake');
-                    numEl.style.color = "red";
-                    setTimeout(() => {
-                        numEl.classList.remove('shake');
-                        numEl.style.color = "white";
-                    }, 500);
-                } else if (state.numberSum === Number(state.targetNum)) {
-                    triggerWin("NUMBER");
-                }
-            } else {
-                // CHECK WORD LOGIC (Strict Mode)
-                const neededLetter = state.targetWord[state.wordIndex];
+    
+        <!-- HELPER TEXT -->
+        <div id="bottom-ui">
+            <div id="helper-text">Tap the bubbles to build the word!</div>
+        </div>
+    
+        <!-- GAME CANVAS -->
+        <canvas id="webgl"></canvas>
+    
+        <!-- SCRIPTS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script>
+            // --- GAME CONFIG ---
+            const state = {
+                playing: false,
+                mode: 'SPELLING', // SPELLING or MATH
                 
-                if (char === neededLetter) {
-                    // Correct Letter!
-                    correct = true;
-                    state.wordIndex++;
-                    trackSequence(recentLetters, char, false);
-                    
-                    // Visual Feedback
-                    document.getElementById('target-word').style.color = "#00ff00"; // Flash Green
-                    setTimeout(() => document.getElementById('target-word').style.color = "white", 200);
-
-                    // Word Complete?
-                    if (state.wordIndex >= state.targetWord.length) {
-                        triggerWin("WORD");
+                // Spelling State
+                targetWord: "EVA",
+                wordIndex: 0, // Which letter we need next (0 = E)
+                wordPool: ["IAN", "ASA", "MAMA", "POP", "ART", "CAT", "DOG", "BUS"],
+                
+                // Math State
+                targetSum: 5,
+                currentSum: 0,
+                mathUnlocked: false,
+                numberPool: [1, 2, 3, 4, 5],
+                
+                level: 1,
+                scoreLetters: 0,
+                scoreNumbers: 0
+            };
+    
+            // --- AUDIO (Placeholder logic) ---
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            function playTone(freq, type='sine') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            }
+    
+            // --- THREE.JS SETUP ---
+            let scene, camera, renderer, bus;
+            const bubbles = [];
+            
+            function init() {
+                const canvas = document.querySelector('#webgl');
+                renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+                camera.position.set(0, 0, 8);
+    
+                // Lighting
+                scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                dirLight.position.set(5, 10, 7);
+                scene.add(dirLight);
+    
+                // Bus (Simple Placeholder Group)
+                bus = new THREE.Group();
+                // Just a simple box for the "Bus" if no sprite is loaded, 
+                // but we'll assume you might add the sprite back later.
+                // For now, it's an invisible anchor for the camera/scene center.
+                scene.add(bus);
+    
+                // Event Listeners
+                window.addEventListener('resize', onResize);
+                window.addEventListener('pointerdown', onTap);
+                document.getElementById('start-btn').addEventListener('click', startGame);
+    
+                animate();
+            }
+    
+            function startGame() {
+                document.getElementById('splash').style.display = 'none';
+                state.playing = true;
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                // Spawn initial bubbles
+                for(let i=0; i<12; i++) spawnBubble();
+                updateHUD();
+            }
+    
+            function spawnBubble(recycleBubble = null) {
+                const bubble = recycleBubble || new THREE.Mesh(
+                    new THREE.SphereGeometry(0.5, 32, 32),
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0xffffff, roughness: 0.1, metalness: 0.1, 
+                        transparent: true, opacity: 0.7 
+                    })
+                );
+    
+                // 1. DETERMINE CONTENT (Letter or Number?)
+                // We force spawn the "needed" item 30% of the time to ensure playability
+                let content = "";
+                let isTarget = false;
+    
+                if (state.mode === 'SPELLING') {
+                    const needed = state.targetWord[state.wordIndex];
+                    if (Math.random() < 0.35) {
+                        content = needed;
+                        isTarget = true;
+                    } else {
+                        // Random distractor from word + randoms
+                        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                        content = chars[Math.floor(Math.random() * chars.length)];
                     }
                 } else {
-                    // WRONG HIT -> PENALTY
-                    // Reset Word Progress
-                    if (state.wordIndex > 0) {
-                        state.wordIndex = 0; // Hard Reset
-                        const wordEl = document.getElementById('target-word');
-                        wordEl.classList.add('shake');
-                        wordEl.style.color = "red";
-                        if (navigator.vibrate) {
-                            navigator.vibrate(200);
-                        }
-                        setTimeout(() => {
-                            wordEl.classList.remove('shake');
-                            wordEl.style.color = "white";
-                        }, 500);
+                    // MATH MODE
+                    if (Math.random() < 0.4) {
+                        // Spawn a number that helps (e.g., if sum is 0/5, spawn 1, 2, 3)
+                        const needed = state.targetSum - state.currentSum;
+                        if (needed > 0 && needed <= 5) content = needed.toString();
+                        else content = (Math.floor(Math.random() * 5) + 1).toString();
+                    } else {
+                        content = (Math.floor(Math.random() * 9) + 1).toString();
                     }
                 }
-            }
-
-            // 3. Reset Bubble Position
-            spawnBubble(bubble); 
-            
-            // 4. Update UI
-            updateHUD();
-        }
-
-        function triggerWin(type) {
-            // Smoothly fade out the loop before the anthem
-            const fadeOut = setInterval(() => {
-                if (audio.bg.volume > 0.05) {
-                    audio.bg.volume -= 0.05;
-                    return;
-                }
-                audio.bg.volume = 0;
-                audio.bg.pause();
-                clearInterval(fadeOut);
-                audio.theme.currentTime = 0;
-                audio.theme.play();
-            }, 50);
-            
-            // Confetti / Particles (Simple JS Burst)
-            createParticles();
-            state.numberSum = 0;
-            state.wordIndex = 0;
-
-            // Resume BG after theme
-            setTimeout(() => {
-                if (state.playing) {
-                    audio.bg.volume = bgBaseVolume;
-                    audio.bg.play();
-                }
-            }, 8000);
-
-            if (type === "WORD") {
-                state.levelLetters++;
-                document.getElementById('bar-left').style.height = (state.levelLetters * 10) + "%";
+    
+                // 2. CREATE TEXT TEXTURE (Star inside bubble)
+                // We draw a star shape on the canvas then text on top
+                if (bubble.userData.sprite) bubble.remove(bubble.userData.sprite);
                 
-                // FIRST WIN UNLOCK
-                if (state.targetWord === "EVA" && !state.numbersUnlocked) {
-                    state.numbersUnlocked = true;
-                    state.numberSum = 0;
-                    document.getElementById('star-right').style.display = 'flex';
-                    document.getElementById('panel-right').style.opacity = "1";
-                    document.getElementById('target-word').innerText = "UNLOCKED!";
-                }
-
-                // Pick New Word
-                state.wordIndex = 0;
-                setTimeout(() => {
-                    const next = state.wordList[Math.floor(Math.random() * state.wordList.length)];
-                    state.targetWord = next;
-                    updateHUD();
-                }, 1500);
-            } 
-            else if (type === "NUMBER") {
-                state.levelNumbers++;
-                document.getElementById('bar-right').style.height = (state.levelNumbers * 10) + "%";
-                state.numberSum = 0;
+                const canvas = document.createElement('canvas');
+                canvas.width = 128; canvas.height = 128;
+                const ctx = canvas.getContext('2d');
                 
-                // Pick New Number
-                setTimeout(() => {
-                    const next = state.numberList[Math.floor(Math.random() * state.numberList.length)];
-                    state.targetNum = next;
-                    updateHUD();
-                }, 1000);
-            }
-
-            state.levelProgress++;
-            checkLevelUp();
-        }
-
-        function createParticles() {
-            // Add DOM particles for simple "Confetti"
-            for(let i=0; i<30; i++) {
-                const p = document.createElement('div');
-                p.style.position = 'fixed';
-                p.style.left = '50%';
-                p.style.top = '50%';
-                p.style.width = '10px';
-                p.style.height = '10px';
-                p.style.backgroundColor = ['#ff0', '#f0f', '#0ff'][Math.floor(Math.random()*3)];
-                p.style.borderRadius = '50%';
-                p.style.transition = 'transform 1s ease-out, opacity 1s';
-                document.body.appendChild(p);
-                
-                setTimeout(() => {
-                    const x = (Math.random() - 0.5) * window.innerWidth;
-                    const y = (Math.random() - 0.5) * window.innerHeight;
-                    p.style.transform = `translate(${x}px, ${y}px) scale(0)`;
-                    p.style.opacity = 0;
-                }, 10);
-                setTimeout(() => p.remove(), 1000);
-            }
-        }
-
-        function updateHUD() {
-            // Update Center Stars
-            const wLabel = document.getElementById('target-word');
-            // Show letters collected so far? Or just the target?
-            // "EVA" -> User has "E" -> Show "E _ _" ? 
-            // Let's stick to showing the GOAL, but highlight progress color?
-            // Simple approach: Show Goal.
-            wLabel.innerText = state.targetWord;
-            
-            // If strict mode, maybe underline the next letter needed?
-            // Advanced: wLabel.innerHTML = `<span style="color:#0f0">${state.targetWord.substring(0, state.wordIndex)}</span>${state.targetWord.substring(state.wordIndex)}`;
-             
-             let html = "";
-             for(let i=0; i<state.targetWord.length; i++) {
-                 if (i < state.wordIndex) html += `<span style="color:#ffff00; text-shadow:0 0 10px gold">${state.targetWord[i]}</span>`; // Found
-                 else if (i === state.wordIndex) html += `<span style="color:#fff; text-decoration:underline">${state.targetWord[i]}</span>`; // Needed
-                 else html += `<span style="opacity:0.5">${state.targetWord[i]}</span>`; // Future
-             }
-             wLabel.innerHTML = html;
-
-            document.getElementById('target-num').innerText = state.targetNum;
-            updateWordBank();
-            updateHelperText();
-            updateStarProgress();
-            updateNeonHUD();
-        }
-
-        function updateWordBank() {
-            const listEl = document.getElementById('word-bank-list');
-            const bank = ["EVA", ...state.wordList];
-            listEl.innerHTML = bank.map((word) => {
-                const isActive = word === state.targetWord;
-                return `<span class="bank-word ${isActive ? "active" : ""}">${word}</span>`;
-            }).join("");
-
-            const letterBank = document.getElementById('letter-bank-list');
-            const letterLabel = state.letterPool.length ? state.letterPool : ["E", "V", "A"];
-            letterBank.innerHTML = letterLabel.map((letter) => `<span class="bank-word">${letter}</span>`).join("");
-
-            const numberBank = document.getElementById('number-bank-list');
-            numberBank.innerHTML = state.numberPool.map((num) => `<span class="bank-word">${num}</span>`).join("");
-        }
-
-        function updateNeonHUD() {
-            const mathScore = document.getElementById('math-score');
-            const wordScore = document.getElementById('word-score');
-            if (mathScore) mathScore.innerText = state.levelNumbers;
-            if (wordScore) wordScore.innerText = state.levelLetters;
-        }
-
-        function updateHelperText() {
-            const levelEl = document.getElementById('level-indicator');
-            if (levelEl) {
-                levelEl.innerText = `Level ${state.level}`;
-            }
-            const config = getLevelConfig();
-            const helper = document.getElementById('helper');
-            helper.innerText = `Tap the bubbles in order! ${state.levelProgress}/${config.goal} wins to level up.`;
-        }
-
-        function updateStarProgress() {
-            const wordProgress = document.getElementById('word-progress');
-            const built = state.targetWord.slice(0, state.wordIndex);
-            const remaining = "_".repeat(Math.max(state.targetWord.length - state.wordIndex, 0));
-            wordProgress.innerText = `${built}${remaining}`;
-
-            const numProgress = document.getElementById('number-progress');
-            if (state.numbersUnlocked) {
-                numProgress.innerText = `Sum: ${state.numberSum} / ${state.targetNum}`;
-            } else {
-                numProgress.innerText = "Locked";
-            }
-        }
-
-        function buildLetterPool() {
-            const words = ["EVA", ...state.wordList];
-            const letters = new Set();
-            words.forEach((word) => {
-                word.split("").forEach((letter) => letters.add(letter));
-            });
-            return Array.from(letters);
-        }
-
-        function trackSequence(sequence, value, isNumber) {
-            sequence.push(value);
-            if (sequence.length > 3) sequence.shift();
-            if (sequence.length < 3) return;
-
-            const isRun = sequence.every((val, idx) => {
-                if (idx === 0) return true;
-                if (isNumber) {
-                    return val === sequence[idx - 1] + 1;
-                }
-                return val.charCodeAt(0) === sequence[idx - 1].charCodeAt(0) + 1;
-            });
-
-            if (isRun) {
-                triggerJackpotEffect();
-            }
-        }
-
-        function triggerJackpotEffect() {
-            createParticles();
-            const helper = document.getElementById('helper');
-            helper.classList.add('pop-anim');
-            helper.innerText = "JACKPOT!";
-            setTimeout(() => {
-                helper.classList.remove('pop-anim');
-                updateHelperText();
-            }, 1200);
-        }
-
-        function getLevelConfig() {
-            return levelConfigs[Math.min(state.level - 1, levelConfigs.length - 1)];
-        }
-
-        function applyLevelConfig() {
-            const config = getLevelConfig();
-            ensureBubbleCount(config.bubbleCount);
-            updateHUD();
-        }
-
-        function ensureBubbleCount(targetCount) {
-            while (bubbles.length < targetCount) {
-                spawnBubble();
-            }
-        }
-
-        function checkLevelUp() {
-            const config = getLevelConfig();
-            if (state.levelProgress < config.goal) {
-                return;
-            }
-            if (state.level < levelConfigs.length) {
-                state.level += 1;
-                state.levelProgress = 0;
-                applyLevelConfig();
-            }
-        }
-
-        function createCloudTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = "rgba(255,255,255,0.85)";
-            ctx.beginPath();
-            ctx.ellipse(70, 70, 50, 30, 0, 0, Math.PI * 2);
-            ctx.ellipse(120, 55, 60, 40, 0, 0, Math.PI * 2);
-            ctx.ellipse(170, 70, 55, 35, 0, 0, Math.PI * 2);
-            ctx.fill();
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.needsUpdate = true;
-            return tex;
-        }
-
-        function createClouds() {
-            const texture = createCloudTexture();
-            for (let i = 0; i < 6; i++) {
-                const material = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.9 });
-                const cloud = new THREE.Sprite(material);
-                cloud.scale.set(3.5 + Math.random() * 2, 1.8 + Math.random(), 1);
-                cloud.position.set((Math.random() - 0.5) * 12, 1 + Math.random() * 4, -8 - Math.random() * 4);
-                cloud.userData = {
-                    speedX: 0.002 + Math.random() * 0.004
+                // Draw Star Icon
+                ctx.fillStyle = "#FFD700"; // Gold
+                ctx.font = "100px serif";
+                ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                ctx.fillText("★", 64, 68); 
+    
+                // Draw Text (Letter/Number)
+                ctx.fillStyle = "#000";
+                ctx.font = "bold 40px Arial";
+                ctx.fillText(content, 64, 64);
+    
+                const tex = new THREE.CanvasTexture(canvas);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+                sprite.scale.set(0.8, 0.8, 1);
+                bubble.add(sprite);
+    
+                // 3. PHYSICS SETUP
+                const x = (Math.random() - 0.5) * 10;
+                const y = -6 - Math.random() * 5; // Start below screen
+                const z = (Math.random() - 0.5) * 2;
+                bubble.position.set(x, y, z);
+    
+                bubble.userData = {
+                    content: content,
+                    sprite: sprite,
+                    speed: 0.02 + Math.random() * 0.03,
+                    wobble: Math.random() * Math.PI
                 };
-                scene.add(cloud);
-                clouds.push(cloud);
-            }
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-
-            const time = performance.now() * 0.001;
-
-            if (state.playing) {
-                const targetCount = getLevelConfig().bubbleCount;
-                if (bubbles.length < targetCount) {
-                    ensureBubbleCount(targetCount);
+    
+                if (!recycleBubble) {
+                    scene.add(bubble);
+                    bubbles.push(bubble);
                 }
-                // Move Bubbles
-                bubbles.forEach(b => {
-                    b.position.z += b.userData.speedZ;
-                    b.position.y += b.userData.speedY;
-                    b.position.x += Math.sin(time * b.userData.wobbleSpeed + b.userData.wobble) * 0.004;
+            }
+    
+            function onTap(e) {
+                if (!state.playing) return;
+    
+                // Raycast logic
+                const mouse = new THREE.Vector2();
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(bubbles);
+    
+                if (intersects.length > 0) {
+                    const bubble = intersects[0].object;
+                    handleBubbleClick(bubble);
+                }
+            }
+    
+            function handleBubbleClick(bubble) {
+                const val = bubble.userData.content;
+                playTone(400 + Math.random()*200, 'sine'); // Pop sound
+    
+                // LOGIC CHECK
+                if (state.mode === 'SPELLING') {
+                    const needed = state.targetWord[state.wordIndex];
+                    if (val === needed) {
+                        // CORRECT!
+                        state.wordIndex++;
+                        playTone(880, 'square'); // Ding!
+                        // Animate "Fly" (simplified: just remove and update HUD)
+                        // In a full version, we'd lerp position to the top star
+                        
+                        if (state.wordIndex >= state.targetWord.length) {
+                            winRound("WORD");
+                        }
+                    } else {
+                        // WRONG - No penalty, just pop
+                    }
+                } else {
+                    // MATH MODE
+                    const num = parseInt(val);
+                    if (!isNaN(num)) {
+                        // Check if adding this exceeds target
+                        if (state.currentSum + num <= state.targetSum) {
+                            state.currentSum += num;
+                            playTone(600 + (state.currentSum*50), 'triangle');
+                            
+                            if (state.currentSum === state.targetSum) {
+                                winRound("NUMBER");
+                            }
+                        } else {
+                            // Would exceed, maybe shake effect?
+                            playTone(150, 'sawtooth'); // low buzz
+                        }
+                    }
+                }
+    
+                // Reset Bubble
+                spawnBubble(bubble);
+                updateHUD();
+            }
+    
+            function winRound(type) {
+                // Celebrate
+                document.body.style.backgroundColor = type === "WORD" ? "#ffb7b2" : "#b2ffb7";
+                setTimeout(() => document.body.style.backgroundColor = "#87ceeb", 500);
+    
+                if (type === "WORD") {
+                    state.scoreLetters++;
+                    // Reset Word
+                    state.wordIndex = 0;
+                    state.targetWord = state.wordPool[Math.floor(Math.random() * state.wordPool.length)];
                     
-                    // Respawn if too close or too high
-                    if (b.position.z > 5.5 || b.position.y > 6) {
-                        spawnBubble(b);
+                    // Unlock Math?
+                    if (state.scoreLetters >= 3 && !state.mathUnlocked) {
+                        state.mathUnlocked = true;
+                        state.mode = 'MATH'; // Switch focus for a bit
+                        document.getElementById('star-right').style.display = 'flex';
+                        document.getElementById('panel-right').style.opacity = '1';
+                        setTimeout(() => document.getElementById('star-right').style.opacity = '1', 100);
                     }
-                });
-
-                // Move Clouds
-                clouds.forEach(c => {
-                    c.position.x += c.userData.speedX;
-                    if (c.position.x > 8) {
-                        c.position.x = -8;
-                    }
-                });
-
-                // Float Bus
-                if (busGroup) {
-                    busGroup.position.y = Math.sin(time * 1.5) * 0.1;
-                    busGroup.rotation.z = Math.sin(time * 0.5) * 0.02;
+                } else {
+                    state.scoreNumbers++;
+                    // Reset Math
+                    state.currentSum = 0;
+                    state.targetSum = state.numberPool[Math.floor(Math.random() * state.numberPool.length)] * 2; // Simple math gen
+                }
+                
+                updateHUD();
+            }
+    
+            function updateHUD() {
+                // SPELLING HUD
+                document.getElementById('goal-word').innerText = state.targetWord;
+                const builtWord = state.targetWord.substring(0, state.wordIndex);
+                const blanks = "_ ".repeat(state.targetWord.length - state.wordIndex);
+                document.getElementById('word-sub').innerText = builtWord + blanks;
+                
+                const lPercent = Math.min(state.scoreLetters * 10, 100);
+                document.getElementById('bar-left').style.height = lPercent + "%";
+    
+                // MATH HUD
+                if (state.mathUnlocked) {
+                    document.getElementById('goal-sum').innerText = state.targetSum;
+                    document.getElementById('sum-sub').innerText = state.currentSum + " / " + state.targetSum;
+                    
+                    const nPercent = Math.min(state.scoreNumbers * 10, 100);
+                    document.getElementById('bar-right').style.height = nPercent + "%";
                 }
             }
-
-            renderer.render(scene, camera);
-        }
-
-        function onResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        window.addEventListener('DOMContentLoaded', init);
-    </script>
-</body>
-</html>
+    
+            function animate() {
+                requestAnimationFrame(animate);
+                if (!state.playing) return;
+    
+                const time = performance.now() * 0.001;
+    
+                bubbles.forEach(b => {
+                    b.position.y += b.userData.speed;
+                    b.position.x += Math.sin(time * 2 + b.userData.wobble) * 0.005;
+    
+                    // Respawn if too high
+                    if (b.position.y > 6) spawnBubble(b);
+                });
+                
+                renderer.render(scene, camera);
+            }
+    
+            function onResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+    
+            window.onload = init;
+        </script>
+    </body>
+    </html>
+    
