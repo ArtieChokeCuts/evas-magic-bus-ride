@@ -7,92 +7,226 @@
         <style>
             * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
             body { overflow: hidden; background: #87ceeb; font-family: "Comic Sans MS", sans-serif; }
-            #hud { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; justify-content: space-between; padding: 20px; }
-            #top-center { position: absolute; top: 10px; width: 100%; display: flex; justify-content: center; gap: 40px; z-index: 20; }
-            .star-goal { position: relative; width: 140px; height: 140px; display: flex; align-items: center; justify-content: center; animation: float 4s infinite; }
-            .star-bg { position: absolute; font-size: 160px; color: #ffc107; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3)); }
-            .star-content { position: relative; z-index: 2; font-size: 2.5rem; font-weight: 900; color: #fff; text-shadow: 2px 2px #000; }
-            #splash { position: fixed; inset: 0; background: #87ceeb; z-index: 100; display: flex; align-items: center; justify-content: center; }
-            #start-btn { padding: 20px 50px; font-size: 2rem; background: #ffe44d; border-radius: 50px; cursor: pointer; }
+            
+            /* SPLASH SCREEN */
+            #splash { 
+                position: fixed; inset: 0; z-index: 100; 
+                background: url('splash.png') no-repeat center center; 
+                background-size: cover;
+                display: flex; align-items: center; justify-content: center; 
+            }
+            #start-btn { 
+                padding: 20px 50px; font-size: 2rem; 
+                background: rgba(255, 228, 77, 0.9); 
+                border: 4px solid #fff; border-radius: 50px; 
+                cursor: pointer; font-weight: bold; color: #5c3d00;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            }
+    
+            /* HUD */
+            #top-center { position: absolute; top: 10px; width: 100%; display: flex; justify-content: center; gap: 40px; z-index: 20; pointer-events: none; }
+            .star-goal { position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center; animation: float 4s infinite; }
+            .star-bg { position: absolute; font-size: 180px; color: #ffc107; filter: drop-shadow(0 5px 15px rgba(0,0,0,0.3)); }
+            .star-content { position: relative; z-index: 2; font-size: 3rem; font-weight: 900; color: #fff; text-shadow: 3px 3px 0 #000; }
+            
             @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
             canvas { display: block; position: absolute; inset: 0; }
         </style>
     </head>
     <body>
-        <div id="splash"><button id="start-btn">START MAGIC BUS!</button></div>
+        <div id="splash"><button id="start-btn">START ADVENTURE!</button></div>
+        
         <div id="top-center">
-            <div class="star-goal"><div class="star-bg">★</div><div class="star-content" id="goal-text">EVA</div></div>
+            <div class="star-goal">
+                <div class="star-bg">★</div>
+                <div class="star-content" id="goal-text">EVA</div>
+            </div>
         </div>
+        
         <canvas id="webgl"></canvas>
     
+        <!-- ASSETS: eva.png, splash.png, eva_theme.mp3, pop.mp3, magic.mp3 -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
         <script>
-            const state = { playing: false, target: "EVA", index: 0, alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", numbers: Array.from({length: 25}, (_, i) => i + 1) };
-            let scene, camera, renderer, evaBus;
+            const state = { 
+                playing: false, 
+                target: "EVA", 
+                index: 0, 
+                alphabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", 
+                numbers: Array.from({length: 25}, (_, i) => i + 1) 
+            };
+            
+            let scene, camera, renderer, evaSprite;
             const bubbles = [];
+            
+            // AUDIO SYSTEM
+            const sounds = {
+                bgm: new Audio('eva_theme.mp3'),
+                pop: new Audio('pop.mp3'),
+                magic: new Audio('magic.mp3')
+            };
+            sounds.bgm.loop = true;
+            sounds.bgm.volume = 0.4;
     
             function init() {
                 renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#webgl'), alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                
                 scene = new THREE.Scene();
                 camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
                 camera.position.z = 8;
     
+                // LOAD EVA SPRITE (eva.png)
                 const loader = new THREE.TextureLoader();
-                loader.load('eva_bus.png', (tex) => {
+                loader.load('eva.png', (tex) => {
+                    const aspect = tex.image.width / tex.image.height;
                     const mat = new THREE.SpriteMaterial({ map: tex });
-                    evaBus = new THREE.Sprite(mat);
-                    evaBus.scale.set(3, 2, 1);
-                    scene.add(evaBus);
+                    evaSprite = new THREE.Sprite(mat);
+                    evaSprite.scale.set(3 * aspect, 3, 1); // Adjust scale based on image
+                    evaSprite.position.y = -1; // Center her a bit lower
+                    scene.add(evaSprite);
                 });
     
-                window.addEventListener('pointerdown', onTap);
+                // START BUTTON
                 document.getElementById('start-btn').onclick = () => { 
                     document.getElementById('splash').style.display = 'none'; 
                     state.playing = true; 
-                    for(let i=0; i<15; i++) spawnBubble();
+                    sounds.bgm.play().catch(e => console.log("Audio needs interaction"));
+                    
+                    // Spawn initial bubbles
+                    for(let i=0; i<12; i++) spawnBubble();
                 };
+    
+                window.addEventListener('pointerdown', onTap);
+                window.addEventListener('resize', onResize);
                 animate();
             }
     
             function spawnBubble(existing = null) {
-                const bubble = existing || new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.6 }));
+                const bubble = existing || new THREE.Mesh(
+                    new THREE.SphereGeometry(0.6, 32, 32), 
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0xffffff, roughness: 0.1, metalness: 0.1, 
+                        transparent: true, opacity: 0.6 
+                    })
+                );
+                
+                // LIGHTING for 3D bubbles
+                if(!scene.children.find(c => c.type === 'DirectionalLight')) {
+                    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+                    dl.position.set(5, 5, 10);
+                    scene.add(dl);
+                    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+                }
+    
+                // TEXTURE GENERATION (Letters/Numbers)
                 if (bubble.userData.sprite) bubble.remove(bubble.userData.sprite);
-                const can = document.createElement('canvas'); can.width = 128; can.height = 128;
+    
+                const can = document.createElement('canvas'); 
+                can.width = 128; can.height = 128;
                 const ctx = can.getContext('2d');
-                ctx.fillStyle = "#FFF"; ctx.font = "bold 80px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-                const val = Math.random() > 0.5 ? state.alphabet[Math.floor(Math.random()*26)] : state.numbers[Math.floor(Math.random()*25)];
-                ctx.fillText(val, 64, 64);
-                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(can) }));
-                sprite.scale.set(0.7, 0.7, 1);
+                
+                // Bubble sheen
+                // ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.arc(64,64,60,0,Math.PI*2); ctx.fill();
+    
+                // Text
+                ctx.fillStyle = "#FFFFFF"; 
+                ctx.font = "bold 80px Arial"; 
+                ctx.textAlign = "center"; 
+                ctx.textBaseline = "middle";
+                ctx.shadowColor="rgba(0,0,0,0.5)"; ctx.shadowBlur=4;
+                
+                // Logic: 40% chance to spawn the NEEDED letter/number
+                let val;
+                if (Math.random() < 0.4) {
+                     val = state.target[state.index];
+                } else {
+                     val = Math.random() > 0.5 ? 
+                           state.alphabet[Math.floor(Math.random()*26)] : 
+                           state.numbers[Math.floor(Math.random()*25)];
+                }
+                
+                ctx.fillText(val, 64, 68);
+    
+                const tex = new THREE.CanvasTexture(can);
+                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+                sprite.scale.set(0.8, 0.8, 1);
                 bubble.add(sprite);
-                bubble.position.set((Math.random()-0.5)*10, -6 - Math.random()*5, (Math.random()-0.5)*2);
-                bubble.userData = { val, sprite, speed: 0.02 + Math.random()*0.03 };
+                
+                // Random Position (below screen)
+                bubble.position.set((Math.random()-0.5)*9, -7 - Math.random()*5, (Math.random()-0.5)*3);
+                
+                bubble.userData = { 
+                    val, 
+                    sprite, 
+                    speed: 0.01 + Math.random()*0.03,
+                    wobble: Math.random() * Math.PI 
+                };
+                
                 if(!existing) { scene.add(bubble); bubbles.push(bubble); }
             }
     
             function onTap(e) {
                 if(!state.playing) return;
-                const mouse = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
-                const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, camera);
+                
+                const mouse = new THREE.Vector2(
+                    (e.clientX/window.innerWidth)*2-1, 
+                    -(e.clientY/window.innerHeight)*2+1
+                );
+                const ray = new THREE.Raycaster(); 
+                ray.setFromCamera(mouse, camera);
                 const hits = ray.intersectObjects(bubbles);
+                
                 if(hits.length > 0) {
                     const b = hits[0].object;
-                    if(b.userData.val === state.target[state.index]) {
+                    
+                    // CHECK MATCH
+                    if(b.userData.val == state.target[state.index]) { // Loose equality for numbers vs string
                         state.index++;
-                        b.material.color.set(0xffff00);
-                        if(state.index >= state.target.length) { state.index = 0; }
-                        document.getElementById('goal-text').innerText = state.target.substring(0, state.index) + "_".repeat(state.target.length - state.index);
+                        
+                        // SUCCESS EFFECT
+                        sounds.magic.currentTime = 0; sounds.magic.play();
+                        
+                        // Update UI
+                        const currentStr = state.target.substring(0, state.index);
+                        const remaining = "_".repeat(state.target.length - state.index);
+                        document.getElementById('goal-text').innerText = currentStr + remaining;
+                        
+                        // Win Condition?
+                        if(state.index >= state.target.length) {
+                            setTimeout(() => {
+                                state.index = 0;
+                                // Reset for endless play or level up
+                                document.getElementById('goal-text').innerText = state.target; 
+                            }, 1000);
+                        }
+                    } else {
+                        sounds.pop.currentTime = 0; sounds.pop.play();
                     }
+                    
+                    // Recycle Bubble
                     spawnBubble(b);
                 }
             }
     
             function animate() {
                 requestAnimationFrame(animate);
-                if(state.playing) bubbles.forEach(b => { b.position.y += b.userData.speed; if(b.position.y > 6) spawnBubble(b); });
+                if(state.playing) {
+                    bubbles.forEach(b => { 
+                        b.position.y += b.userData.speed; 
+                        b.position.x += Math.sin(performance.now()*0.001 + b.userData.wobble) * 0.002;
+                        if(b.position.y > 6) spawnBubble(b); 
+                    });
+                }
                 renderer.render(scene, camera);
             }
+            
+            function onResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+    
             init();
         </script>
     </body>
