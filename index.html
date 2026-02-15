@@ -3,596 +3,223 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Super Eva's Magic Bus Ride</title>
-  <link rel="icon" href="data:," />
+  <title>Eva's Magic Bus Ride</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      overflow: hidden;
-      background: #3d5f8f;
-      font-family: "Comic Sans MS", "Trebuchet MS", sans-serif;
-      color: #4b3b6b;
-      touch-action: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    #app {
-      position: relative;
-      width: min(100vw, calc(100vh * 9 / 16));
-      height: min(100vh, calc(100vw * 16 / 9));
-      max-height: 100vh;
-      max-width: 100vw;
-      aspect-ratio: 9 / 16;
-      overflow: hidden;
-      background: #87ceeb;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
-    }
-    #splash-screen {
-      position: absolute;
-      inset: 0;
-      background: url("splash.png") center center / cover no-repeat;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 10;
-    }
-    #start-button {
-      border: none;
-      background: #ffe44d;
-      color: #5c3d00;
-      font-size: 1.8rem;
-      padding: 16px 40px;
-      border-radius: 999px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      cursor: pointer;
-      box-shadow: 0 12px 30px rgba(255, 228, 77, 0.5);
-      animation: pulse 1.6s ease-in-out infinite;
-    }
-    #start-button:focus-visible {
-      outline: 4px solid rgba(255, 255, 255, 0.8);
-      outline-offset: 4px;
-    }
-    @keyframes pulse {
-      0% {
-        transform: scale(1);
-        box-shadow: 0 12px 30px rgba(255, 228, 77, 0.5);
-      }
-      50% {
-        transform: scale(1.08);
-        box-shadow: 0 16px 40px rgba(255, 228, 77, 0.75);
-      }
-      100% {
-        transform: scale(1);
-        box-shadow: 0 12px 30px rgba(255, 228, 77, 0.5);
-      }
-    }
-    canvas {
-      display: block;
-      position: absolute;
-      inset: 0;
-    }
+    body { margin: 0; overflow: hidden; background: #f0e6ff; font-family: Arial, sans-serif; }
     #ui {
-      z-index: 2;
-      pointer-events: none;
-    }
-    #hud {
       position: absolute;
-      inset: 0;
-      z-index: 3;
-      pointer-events: none;
-    }
-    #title {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.8);
-      padding: 10px 24px;
-      border-radius: 999px;
-      font-size: 1.4rem;
-      color: #6b4fc7;
-      box-shadow: 0 8px 20px rgba(126, 87, 194, 0.2);
-      z-index: 4;
-      text-align: center;
-      letter-spacing: 0.5px;
-    }
-    #letter-popup {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: clamp(3rem, 10vw, 6rem);
-      color: #ff6fae;
-      text-shadow: 0 6px 18px rgba(255, 111, 174, 0.5);
-      opacity: 0;
-      transition: opacity 0.25s ease;
-      z-index: 4;
-      pointer-events: none;
-    }
-    #helper {
-      position: absolute;
-      bottom: 18px;
+      top: 10px;
       width: 100%;
       text-align: center;
-      font-size: 1rem;
-      color: #5a5a8f;
-      z-index: 4;
-      text-shadow: 0 2px 6px rgba(255, 255, 255, 0.8);
+      color: #7b61ff;
+      z-index: 10;
+    }
+    #hud {
+      display: inline-flex;
+      gap: 14px;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.75);
+      border-radius: 12px;
+      color: #4f3fb2;
+      font-weight: 700;
     }
   </style>
 </head>
 <body>
-  <div id="app">
-  <div id="splash-screen">
-    <button id="start-button" type="button">START GAME</button>
-  </div>
-  <div id="title">Super Eva's Magic Bus Ride</div>
-  <div id="letter-popup"></div>
-  <div id="helper">Tap a bubble to pop it with your magic wand!</div>
-  <canvas id="webgl"></canvas>
-  <canvas id="ui"></canvas>
-  <canvas id="hud"></canvas>
+  <div id="ui">
+    <h1>Super Eva's Magic Bus Ride</h1>
+    <div id="hud">
+      <span id="math-level">Math Level: 1</span>
+      <span id="spell-level">Spelling Level: 1</span>
+      <span id="targets">Targets: 11 & E</span>
+    </div>
   </div>
 
-  <script src="three.min.js"></script>
   <script>
-    let appRoot;
-    let canvas;
-    let uiCanvas;
-    let hudCanvas;
-    let letterPopup;
-    let splashScreen;
-    let startButton;
-    let renderer;
-    let scene;
-    let camera;
-    let uiCtx;
-    let hudCtx;
-    let busGroup;
-    let wandTip;
-    let bubbleLabels = [];
-    let bubbleGeometry;
-    let bubbleMaterial;
-    let loopAudio;
-    let evaThemeAudio;
-    let popAudio;
-    let magicAudio;
-    let isGameStarted = false;
-    let lastTime = 0;
-    let viewportWidth = 0;
-    let viewportHeight = 0;
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-    const bubbles = [];
-    const poppingBubbles = new Set();
-    const sparkles = [];
-    const magicBursts = [];
-    const clouds = [];
+    const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+    pointLight.position.set(10, 10, 10);
+    scene.add(pointLight);
+    scene.add(new THREE.AmbientLight(0x404040));
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const targetSequence = ["E", "V", "A"];
-    const speed = 0.04;
-    let sequenceIndex = 0;
-    let easterEggTriggered = false;
+    const bubbles = [];
 
-    function makeTextSprite(text) {
-      const size = 256;
-      const textCanvas = document.createElement("canvas");
-      textCanvas.width = size;
-      textCanvas.height = size;
-      const ctx = textCanvas.getContext("2d");
-      ctx.fillStyle = "rgba(255, 255, 255, 0.0)";
-      ctx.fillRect(0, 0, size, size);
-      ctx.font = "bold 120px Comic Sans MS";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#6b4fc7";
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 10;
-      ctx.strokeText(text, size / 2, size / 2 + 4);
-      ctx.fillText(text, size / 2, size / 2 + 4);
+    const state = {
+      mathLevel: 1,
+      spellingLevel: 1,
+      mathTargets: ['11', '9', '7', '13'],
+      letterTargets: ['E', 'B', 'A', 'V'],
+      currentMathTarget: '11',
+      currentLetterTarget: 'E'
+    };
 
-      const texture = new THREE.CanvasTexture(textCanvas);
-      texture.minFilter = THREE.LinearFilter;
-      const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-      const sprite = new THREE.Sprite(material);
-      sprite.scale.set(1.2, 1.2, 1.2);
-      return sprite;
+    const popSound = new Audio('pop.mp3');
+    const magicSound = new Audio('magic.mp3');
+    const themeSound = new Audio('eva_theme.mp3');
+    themeSound.loop = true;
+    themeSound.volume = 0.4;
+    window.addEventListener('pointerdown', () => {
+      if (themeSound.paused) {
+        themeSound.play().catch(() => {});
+      }
+    }, { once: true });
+
+    function drawCloud(x, y, z) {
+      const cloud = new THREE.Group();
+      const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      [
+        [-0.6, 0, 0, 0.5],
+        [0, 0.15, 0, 0.65],
+        [0.65, 0, 0, 0.48]
+      ].forEach(([cx, cy, cz, r]) => {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 24), material);
+        puff.position.set(cx, cy, cz);
+        cloud.add(puff);
+      });
+      cloud.position.set(x, y, z);
+      scene.add(cloud);
     }
 
-    function spawnBubble(existingBubble) {
-      const label = bubbleLabels[Math.floor(Math.random() * bubbleLabels.length)];
-      const bubble = existingBubble || new THREE.Mesh(bubbleGeometry, bubbleMaterial.clone());
-      bubble.material.color.setHSL(Math.random(), 0.4, 0.85);
-      bubble.material.opacity = 0.55;
-      bubble.scale.setScalar(1);
-      bubble.position.set(
-        (Math.random() - 0.5) * 10,
-        1 + Math.random() * 4,
-        -10 - Math.random() * 40
-      );
-      bubble.userData = {
-        label,
-        floatOffset: Math.random() * Math.PI * 2,
-        sprite: bubble.userData ? bubble.userData.sprite : null,
-        popProgress: 0
+    function createBubble(value, color, x, y, type) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 256;
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(128, 128, 120, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = 'bold 120px Arial';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(value, 128, 128);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.MeshPhongMaterial({ map: texture, transparent: true });
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), material);
+      sphere.position.set(x, y, 0);
+      sphere.userData = {
+        value,
+        type,
+        popScale: 1,
+        popping: false
       };
-      if (bubble.userData.sprite) {
-        bubble.remove(bubble.userData.sprite);
-      }
-      const sprite = makeTextSprite(label);
-      sprite.position.set(0, 0, 0.6);
-      bubble.add(sprite);
-      bubble.userData.sprite = sprite;
-      if (!existingBubble) {
-        scene.add(bubble);
-        bubbles.push(bubble);
-      }
+      scene.add(sphere);
+      bubbles.push(sphere);
+      return sphere;
     }
 
-    function addSparkles(screenX, screenY) {
-      for (let i = 0; i < 18; i++) {
-        sparkles.push({
-          x: screenX,
-          y: screenY,
-          vx: (Math.random() - 0.5) * 3,
-          vy: (Math.random() - 0.7) * 3,
-          life: 1
-        });
-      }
+    function updateHud() {
+      document.getElementById('math-level').textContent = `Math Level: ${state.mathLevel}`;
+      document.getElementById('spell-level').textContent = `Spelling Level: ${state.spellingLevel}`;
+      document.getElementById('targets').textContent = `Targets: ${state.currentMathTarget} & ${state.currentLetterTarget}`;
     }
 
-    function showLetter(label) {
-      letterPopup.textContent = label;
-      letterPopup.style.opacity = "1";
-      clearTimeout(showLetter._timeout);
-      showLetter._timeout = setTimeout(() => {
-        letterPopup.style.opacity = "0";
-      }, 900);
+    function advanceTarget(type) {
+      if (type === 'math') {
+        state.mathLevel += 1;
+        state.currentMathTarget = state.mathTargets[(state.mathLevel - 1) % state.mathTargets.length];
+      } else {
+        state.spellingLevel += 1;
+        state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
+      }
+      magicSound.currentTime = 0;
+      magicSound.play().catch(() => {});
+      updateHud();
     }
 
-    function enterFullscreen() {
-      if (document.fullscreenElement) {
-        return Promise.resolve();
+    function respawnBubble(mesh) {
+      if (mesh.userData.type === 'math') {
+        mesh.userData.value = state.currentMathTarget;
+      } else {
+        mesh.userData.value = state.currentLetterTarget;
       }
-      if (document.documentElement.requestFullscreen) {
-        return document.documentElement.requestFullscreen();
-      }
-      return Promise.resolve();
+      const newX = mesh.userData.type === 'math' ? -2.5 - Math.random() * 2 : 2.5 + Math.random() * 2;
+      const newY = 1.2 + Math.random() * 1.8;
+
+      const newBubble = createBubble(
+        mesh.userData.value,
+        mesh.userData.type === 'math' ? '#7B61FF' : '#FF61B6',
+        newX,
+        newY,
+        mesh.userData.type
+      );
+      newBubble.rotation.y = Math.random() * Math.PI;
     }
 
-    function handleTap(event) {
-      if (!isGameStarted) {
-        return;
-      }
-      const rect = canvas.getBoundingClientRect();
-      const x = (event.clientX - rect.left) / rect.width;
-      const y = (event.clientY - rect.top) / rect.height;
-      pointer.x = x * 2 - 1;
-      pointer.y = -(y * 2 - 1);
-
+    function handlePointer(event) {
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
 
-      let closestBubble = null;
-      let closestDistance = Infinity;
-      bubbles.forEach((bubble) => {
-        if (bubble.userData.popProgress > 0) {
-          return;
-        }
-        const distanceToRay = raycaster.ray.distanceToPoint(bubble.position);
-        if (distanceToRay < 1.4) {
-          const camDistance = bubble.position.distanceTo(camera.position);
-          if (camDistance < closestDistance) {
-            closestDistance = camDistance;
-            closestBubble = bubble;
-          }
-        }
-      });
+      const active = bubbles.filter((b) => !b.userData.popping);
+      const intersects = raycaster.intersectObjects(active);
+      if (intersects.length === 0) return;
 
-      if (closestBubble) {
-        const label = closestBubble.userData.label;
-        const vector = closestBubble.position.clone().project(camera);
-        const screenX = (vector.x * 0.5 + 0.5) * viewportWidth;
-        const screenY = (-vector.y * 0.5 + 0.5) * viewportHeight;
-        addSparkles(screenX, screenY);
-        showLetter(label);
-        popAudio.currentTime = 0;
-        popAudio.play().catch(() => {});
-        closestBubble.userData.popProgress = 0.01;
-        poppingBubbles.add(closestBubble);
-        magicBursts.push({
-          start: performance.now(),
-          x: screenX,
-          y: screenY
-        });
-        magicAudio.currentTime = 0;
-        magicAudio.play().catch(() => {});
+      const hit = intersects[0].object;
+      hit.userData.popping = true;
 
-        if (!easterEggTriggered) {
-          if (label === targetSequence[sequenceIndex]) {
-            sequenceIndex += 1;
-            if (sequenceIndex === targetSequence.length) {
-              easterEggTriggered = true;
-              loopAudio.pause();
-              evaThemeAudio.currentTime = 0;
-              evaThemeAudio.play().catch(() => {});
-            }
-          } else if (label === targetSequence[0]) {
-            sequenceIndex = 1;
-          } else {
-            sequenceIndex = 0;
-          }
-        }
+      popSound.currentTime = 0;
+      popSound.play().catch(() => {});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) {
+        advanceTarget('math');
+      }
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) {
+        advanceTarget('spelling');
       }
     }
 
-    function resize() {
-      viewportWidth = appRoot.clientWidth;
-      viewportHeight = appRoot.clientHeight;
-      renderer.setSize(viewportWidth, viewportHeight);
-      camera.aspect = viewportWidth / viewportHeight;
-      camera.updateProjectionMatrix();
-      uiCanvas.width = viewportWidth;
-      uiCanvas.height = viewportHeight;
-      hudCanvas.width = viewportWidth;
-      hudCanvas.height = viewportHeight;
+    for (let i = 0; i < 7; i += 1) {
+      drawCloud(-7 + i * 2.3, 3.8 - (i % 2) * 0.4, -4 - (i % 3));
     }
 
-    function animate(time) {
+    createBubble(state.currentMathTarget, '#7B61FF', -3, 2, 'math');
+    createBubble(state.currentLetterTarget, '#FF61B6', 3, 2, 'spelling');
+
+    camera.position.z = 8;
+    updateHud();
+
+    function animate() {
       requestAnimationFrame(animate);
-      const delta = (time - lastTime) / 16.666;
-      lastTime = time;
 
-      if (!isGameStarted) {
-        renderer.render(scene, camera);
-        return;
-      }
-
-      clouds.forEach((cloud) => {
-        cloud.position.z += speed * 10 * cloud.userData.speedFactor * delta;
-        if (cloud.position.z > camera.position.z + 2) {
-          cloud.position.z = -70 - Math.random() * 40;
-          cloud.position.x = (Math.random() - 0.5) * 20;
-          cloud.position.y = 2 + Math.random() * 6;
-          cloud.scale.set(6 + Math.random() * 6, 3 + Math.random() * 3, 1);
-        }
-      });
-
-      bubbles.forEach((bubble) => {
-        if (bubble.userData.popProgress <= 0) {
-          bubble.position.z += speed * 1.2 * delta;
-        }
-        bubble.position.y += Math.sin(time * 0.002 + bubble.userData.floatOffset) * 0.005;
-        if (bubble.position.z > camera.position.z + 1) {
-          spawnBubble(bubble);
-        }
-      });
-
-      poppingBubbles.forEach((bubble) => {
-        bubble.userData.popProgress += 0.08;
-        const scale = Math.max(0, 1 - bubble.userData.popProgress);
-        bubble.scale.setScalar(scale);
-        bubble.material.opacity = Math.max(0, 0.55 * scale);
-        if (bubble.userData.popProgress >= 1) {
-          poppingBubbles.delete(bubble);
-          spawnBubble(bubble);
-        }
-      });
-
-      const hoverOffset = Math.sin(time * 0.003) * 0.08;
-      busGroup.position.y = -0.1 + hoverOffset;
-      wandTip.scale.setScalar(1 + Math.sin(time * 0.01) * 0.1);
-      const cameraTarget = new THREE.Vector3(0, 1.6 + hoverOffset, 5.5);
-      camera.position.lerp(cameraTarget, 0.06);
-      camera.lookAt(0, 1, 0);
-
-      uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
-      sparkles.forEach((sparkle) => {
-        sparkle.x += sparkle.vx;
-        sparkle.y += sparkle.vy;
-        sparkle.life -= 0.03;
-      });
-      for (let i = sparkles.length - 1; i >= 0; i--) {
-        if (sparkles[i].life <= 0) {
-          sparkles.splice(i, 1);
+      for (let i = bubbles.length - 1; i >= 0; i -= 1) {
+        const obj = bubbles[i];
+        obj.rotation.y += 0.01;
+        if (obj.userData.popping) {
+          obj.userData.popScale -= 0.08;
+          obj.scale.setScalar(Math.max(obj.userData.popScale, 0));
+          if (obj.userData.popScale <= 0) {
+            scene.remove(obj);
+            bubbles.splice(i, 1);
+            respawnBubble(obj);
+          }
         }
       }
-      sparkles.forEach((sparkle) => {
-        uiCtx.beginPath();
-        uiCtx.fillStyle = `rgba(255, 215, 130, ${sparkle.life})`;
-        uiCtx.arc(sparkle.x, sparkle.y, 4, 0, Math.PI * 2);
-        uiCtx.fill();
-      });
-
-      hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
-      const now = performance.now();
-      const wandWorld = new THREE.Vector3();
-      wandTip.getWorldPosition(wandWorld);
-      const wandScreen = wandWorld.clone().project(camera);
-      const wandScreenX = (wandScreen.x * 0.5 + 0.5) * viewportWidth;
-      const wandScreenY = (-wandScreen.y * 0.5 + 0.5) * viewportHeight;
-      for (let i = magicBursts.length - 1; i >= 0; i--) {
-        const burst = magicBursts[i];
-        const age = (now - burst.start) / 450;
-        if (age > 1) {
-          magicBursts.splice(i, 1);
-          continue;
-        }
-        const alpha = 1 - age;
-        hudCtx.strokeStyle = `rgba(255, 221, 122, ${alpha})`;
-        hudCtx.lineWidth = 4;
-        hudCtx.beginPath();
-        hudCtx.moveTo(wandScreenX, wandScreenY);
-        hudCtx.lineTo(burst.x, burst.y);
-        hudCtx.stroke();
-        hudCtx.fillStyle = `rgba(255, 182, 233, ${alpha})`;
-        hudCtx.beginPath();
-        hudCtx.arc(burst.x, burst.y, 12 + age * 8, 0, Math.PI * 2);
-        hudCtx.fill();
-      }
-      hudCtx.beginPath();
-      hudCtx.strokeStyle = "rgba(255,255,255,0.7)";
-      hudCtx.lineWidth = 3;
-      hudCtx.arc(viewportWidth / 2, viewportHeight / 2, 20, 0, Math.PI * 2);
-      hudCtx.stroke();
 
       renderer.render(scene, camera);
     }
 
-    function init() {
-      appRoot = document.getElementById("app");
-      canvas = document.getElementById("webgl");
-      uiCanvas = document.getElementById("ui");
-      hudCanvas = document.getElementById("hud");
-      letterPopup = document.getElementById("letter-popup");
-      splashScreen = document.getElementById("splash-screen");
-      startButton = document.getElementById("start-button");
+    window.addEventListener('pointerdown', handlePointer);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio || 1);
-      renderer.setSize(appRoot.clientWidth, appRoot.clientHeight);
-
-      scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0xf7e9ff, 6, 32);
-
-      camera = new THREE.PerspectiveCamera(60, appRoot.clientWidth / appRoot.clientHeight, 0.1, 100);
-      camera.position.set(0, 1.5, 5);
-
-      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
-      scene.add(ambient);
-      const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
-      mainLight.position.set(4, 6, 5);
-      scene.add(mainLight);
-
-      uiCtx = uiCanvas.getContext("2d");
-      hudCtx = hudCanvas.getContext("2d");
-
-      const skyGlow = new THREE.Mesh(
-        new THREE.SphereGeometry(30, 32, 32),
-        new THREE.MeshBasicMaterial({ color: 0xe6f7ff, side: THREE.BackSide })
-      );
-      scene.add(skyGlow);
-
-      busGroup = new THREE.Group();
-      scene.add(busGroup);
-
-      const evaTexture = new THREE.TextureLoader().load("eva.png");
-      const evaSprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: evaTexture, transparent: true })
-      );
-      evaSprite.scale.set(0.5, 0.5, 0.5);
-      evaSprite.position.set(0, 1.1, 0);
-      busGroup.add(evaSprite);
-
-      // Create the magic point (invisible source for sparkles)
-      wandTip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.05, 16, 16),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
-      );
-      wandTip.position.set(0.4, 1.1, 0);
-      busGroup.add(wandTip);
-
-      busGroup.position.set(0, -0.2, 3.5);
-
-      const cloudCanvas = document.createElement("canvas");
-      cloudCanvas.width = 256;
-      cloudCanvas.height = 128;
-      const cloudCtx = cloudCanvas.getContext("2d");
-      cloudCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
-      cloudCtx.beginPath();
-      cloudCtx.ellipse(70, 70, 55, 35, 0, 0, Math.PI * 2);
-      cloudCtx.ellipse(120, 55, 65, 45, 0, 0, Math.PI * 2);
-      cloudCtx.ellipse(170, 70, 50, 32, 0, 0, Math.PI * 2);
-      cloudCtx.fill();
-      const cloudTexture = new THREE.CanvasTexture(cloudCanvas);
-
-      clouds.length = 0;
-      const cloudCount = 18;
-      for (let i = 0; i < cloudCount; i++) {
-        const cloud = new THREE.Sprite(
-          new THREE.SpriteMaterial({ map: cloudTexture, transparent: true, opacity: 0.85 })
-        );
-        cloud.scale.set(6 + Math.random() * 6, 3 + Math.random() * 3, 1);
-        cloud.position.set(
-          (Math.random() - 0.5) * 20,
-          2 + Math.random() * 6,
-          -10 - Math.random() * 60
-        );
-        cloud.userData = { speedFactor: 0.4 + Math.random() * 0.6 };
-        clouds.push(cloud);
-        scene.add(cloud);
-      }
-
-      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-      const numbers = Array.from({ length: 20 }, (_, i) => String(i + 1));
-      bubbleLabels = [...letters, ...numbers];
-
-      bubbleGeometry = new THREE.SphereGeometry(0.45, 20, 20);
-      bubbleMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.55,
-        roughness: 0.2,
-        metalness: 0.1
-      });
-
-      bubbles.length = 0;
-      poppingBubbles.clear();
-      const bubbleCount = 18;
-      for (let i = 0; i < bubbleCount; i++) {
-        spawnBubble();
-      }
-
-      loopAudio = new Audio("loop.mp3");
-      loopAudio.loop = true;
-      evaThemeAudio = new Audio("eva_theme.mp3");
-      popAudio = new Audio("pop.mp3");
-      magicAudio = new Audio("magic.mp3");
-
-      isGameStarted = false;
-      lastTime = 0;
-      sequenceIndex = 0;
-      easterEggTriggered = false;
-
-      startButton.addEventListener("click", startGame);
-      startButton.addEventListener("pointerdown", startGame);
-      splashScreen.addEventListener("pointerdown", (event) => {
-        if (event.target === startButton) {
-          return;
-        }
-        startGame();
-      });
-      window.addEventListener("keydown", (event) => {
-        if (!isGameStarted && (event.key === "Enter" || event.key === " ")) {
-          event.preventDefault();
-          startGame();
-        }
-      });
-      window.addEventListener("pointerdown", handleTap);
-      window.addEventListener("resize", resize);
-      resize();
-      animate(0);
-    }
-
-    function startGame() {
-      if (isGameStarted) {
-        return;
-      }
-      isGameStarted = true;
-      splashScreen.style.display = "none";
-      enterFullscreen();
-      loopAudio.currentTime = 0;
-      loopAudio.play().catch(() => {});
-    }
-
-    init();
+    animate();
   </script>
 </body>
 </html>
