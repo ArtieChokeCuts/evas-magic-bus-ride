@@ -1,221 +1,225 @@
 <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-        <title>Super Eva's Magic Bus Ride</title>
-        <style>
-            /* --- CORE VISUALS --- */
-            * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
-            body { 
-                overflow: hidden; 
-                background: linear-gradient(to bottom, #f0f8ff 0%, #fffafa 100%); /* Sharper off-white gradient */
-                font-family: 'Comic Sans MS', sans-serif;
-                touch-action: none; 
-            }
-    
-            /* --- CENTER STARS --- */
-            #top-center {
-                position: absolute; top: 20px; width: 100%; display: flex;
-                justify-content: center; gap: 40px; pointer-events: none; z-index: 20;
-            }
-            .star-box {
-                position: relative; width: 140px; height: 140px;
-                display: flex; align-items: center; justify-content: center;
-                animation: float 3s ease-in-out infinite;
-            }
-            .star-shape { 
-                position: absolute; font-size: 160px; 
-                filter: drop-shadow(0 4px 10px rgba(0,0,0,0.1)); 
-            }
-            .star-content { 
-                position: relative; z-index: 2; 
-                font-size: 2rem; font-weight: 900; color: white; 
-                text-shadow: 2px 2px 0px rgba(0,0,0,0.2); text-align: center; line-height: 1;
-            }
-            #star-left .star-shape { color: #ffc107; }
-            #star-right .star-shape { color: #fd7e14; }
-    
-            /* --- SIDE BARS --- */
-            .side-panel {
-                position: absolute; top: 50%; transform: translateY(-50%);
-                width: 60px; height: 200px;
-                background: rgba(255,255,255,0.6); border-radius: 30px;
-                border: 2px solid white; overflow: hidden;
-                display: flex; flex-direction: column; justify-content: flex-end;
-            }
-            .side-label {
-                position: absolute; top: -30px; width: 100%; text-align: center;
-                font-weight: bold; color: #d63384; font-size: 0.9rem;
-            }
-            #panel-left { left: 20px; }
-            #panel-right { right: 20px; }
-            .liquid { width: 100%; transition: height 0.5s ease; }
-            #fill-letters { height: 0%; background: #ff00ff; }
-            #fill-numbers { height: 0%; background: #00cc00; }
-    
-            /* --- UI --- */
-            #splash-screen {
-                position: fixed; inset: 0; z-index: 100;
-                background: #f0f8ff;
-                display: flex; flex-direction: column; align-items: center; justify-content: center;
-            }
-            h1 { color: #ff00ff; font-size: 3rem; margin-bottom: 20px; text-align: center; }
-            #start-btn {
-                padding: 20px 60px; font-size: 2rem; font-weight: 900; border-radius: 50px;
-                border: none; background: #ffc107; color: white; cursor: pointer;
-            }
-            canvas { display: block; position: absolute; inset: 0; z-index: 5; }
-            @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
-        </style>
-    </head>
-    <body>
-        <div id="splash-screen">
-            <h1>Super Eva's Magic Ride</h1>
-            <button id="start-btn">PLAY!</button>
-        </div>
-        <div id="top-center">
-            <div id="star-left" class="star-box"><div class="star-shape">★</div><div class="star-content" id="target-word">EVA</div></div>
-            <div id="star-right" class="star-box"><div class="star-shape">★</div><div class="star-content" id="target-num">25</div></div>
-        </div>
-        <div id="panel-left" class="side-panel"><div class="side-label">ABC</div><div id="fill-letters" class="liquid"></div></div>
-        <div id="panel-right" class="side-panel"><div class="side-label">123</div><div id="fill-numbers" class="liquid"></div></div>
-        <canvas id="webgl"></canvas>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-        <script>
-            const audio = {
-                loop: new Audio('loop.mp3'),
-                pop: new Audio('pop.mp3'),
-                magic: new Audio('magic.mp3'),
-                evaTheme: new Audio('eva_theme.mp3')
-            };
-            audio.loop.loop = true;
-    
-            const state = {
-                playing: false, targetWord: "EVA", wordIndex: 0, targetNum: 25,
-                currentSum: 0, scoreLetters: 0, scoreNumbers: 0,
-                wordList: ["EVA", "ASA", "IAN", "MAMA", "POP", "ART", "CAT", "DOG", "BUS"]
-            };
-    
-            let scene, camera, renderer, evaSprite;
-            const bubbles = [], clouds = [];
-    
-            function init() {
-                scene = new THREE.Scene();
-                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-                camera.position.z = 8;
-                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl'), alpha: true, antialias: true });
-                renderer.setSize(window.innerWidth, window.innerHeight);
-    
-                const amb = new THREE.AmbientLight(0xffffff, 1); scene.add(amb);
-    
-                new THREE.TextureLoader().load('eva.png', (tex) => {
-                    const mat = new THREE.SpriteMaterial({ map: tex });
-                    evaSprite = new THREE.Sprite(mat);
-                    evaSprite.scale.set(4, 4, 1); // Increased size for resolution
-                    evaSprite.position.y = -1.5;
-                    scene.add(evaSprite);
-                });
-    
-                createClouds();
-                window.addEventListener('pointerdown', onTap);
-                document.getElementById('start-btn').addEventListener('click', startGame);
-                animate();
-            }
-    
-            function createClouds() {
-                const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 64;
-                const c = cvs.getContext('2d');
-                c.fillStyle = "white"; // Pure white clouds, no border
-                c.beginPath(); c.arc(64,32,30,0,Math.PI*2); c.fill();
-                c.beginPath(); c.arc(40,32,20,0,Math.PI*2); c.fill();
-                c.beginPath(); c.arc(88,32,20,0,Math.PI*2); c.fill();
-                const tex = new THREE.CanvasTexture(cvs);
-    
-                for(let i=0; i<12; i++) {
-                    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9 }));
-                    s.scale.set(5, 2.5, 1);
-                    // Spread out in foreground and background
-                    s.position.set((Math.random()-0.5)*20, Math.random()*5, (Math.random()-0.5)*10);
-                    s.userData = { speed: 0.005 + Math.random()*0.01 };
-                    clouds.push(s); scene.add(s);
-                }
-            }
-    
-            function spawnBubble(recycle = null) {
-                const bubble = recycle || new THREE.Mesh(
-                    new THREE.SphereGeometry(0.7, 32, 32),
-                    new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
-                );
-    
-                const isLetter = Math.random() > 0.5;
-                let text = isLetter ? (Math.random() < 0.3 ? state.targetWord[state.wordIndex] : "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random()*26)]) : [1, 2, 3, 4, 5, 10][Math.floor(Math.random()*6)].toString();
-                
-                if (bubble.userData.sprite) bubble.remove(bubble.userData.sprite);
-                const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 128;
-                const ctx = cvs.getContext('2d');
-                ctx.fillStyle = isLetter ? "#ff00ff" : "#00cc00"; // High contrast
-                ctx.font = "bold 90px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-                ctx.fillText(text, 64, 64);
-                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cvs) }));
-                bubble.add(sprite);
-    
-                bubble.position.set((Math.random()-0.5)*12, -8, (Math.random()-0.5)*5);
-                bubble.userData = { val: text, isLetter, speed: 0.03 + Math.random()*0.02, sprite };
-                if (!recycle) { scene.add(bubble); bubbles.push(bubble); }
-            }
-    
-            function onTap(e) {
-                if (!state.playing) return;
-                const mouse = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
-                const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, camera);
-                const hits = ray.intersectObjects(bubbles);
-                if (hits.length > 0) handleHit(hits[0].object);
-            }
-    
-            function handleHit(b) {
-                const val = b.userData.val;
-                if (b.userData.isLetter) {
-                    if (val === state.targetWord[state.wordIndex]) {
-                        state.wordIndex++; audio.magic.play();
-                        if (state.wordIndex >= state.targetWord.length) {
-                            state.scoreLetters++; state.wordIndex = 0;
-                            audio.evaTheme.play(); // Play theme on full word
-                            state.targetWord = state.wordList[Math.floor(Math.random()*state.wordList.length)];
-                        }
-                    } else { audio.pop.play(); }
-                } else {
-                    state.currentSum += parseInt(val); audio.magic.play();
-                    if (state.currentSum >= state.targetNum) {
-                        if (state.currentSum === state.targetNum) { state.scoreNumbers++; audio.evaTheme.play(); }
-                        state.currentSum = 0; state.targetNum = [10, 15, 20, 25][Math.floor(Math.random()*4)];
-                    }
-                }
-                spawnBubble(b); updateHUD();
-            }
-    
-            function updateHUD() {
-                document.getElementById('target-word').innerText = state.targetWord;
-                document.getElementById('target-num').innerText = `${state.currentSum}/${state.targetNum}`;
-                document.getElementById('fill-letters').style.height = (state.scoreLetters * 10) + "%";
-                document.getElementById('fill-numbers').style.height = (state.scoreNumbers * 10) + "%";
-            }
-    
-            function startGame() { 
-                document.getElementById('splash-screen').style.display = 'none'; 
-                state.playing = true; audio.loop.play();
-                for(let i=0; i<15; i++) spawnBubble();
-            }
-    
-            function animate() {
-                requestAnimationFrame(animate);
-                if (!state.playing) return;
-                bubbles.forEach(b => { b.position.y += b.userData.speed; if(b.position.y > 6) spawnBubble(b); });
-                clouds.forEach(c => { c.position.x += c.userData.speed; if(c.position.x > 10) c.position.x = -10; });
-                if (evaSprite) evaSprite.position.y = -1.5 + Math.sin(Date.now()*0.002)*0.1;
-                renderer.render(scene, camera);
-            }
-            init();
-        </script>
-    </body>
-    </html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eva's Magic Bus Ride</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background: #f0e6ff; font-family: Arial, sans-serif; }
+    #ui {
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      color: #7b61ff;
+      z-index: 10;
+    }
+    #hud {
+      display: inline-flex;
+      gap: 14px;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.75);
+      border-radius: 12px;
+      color: #4f3fb2;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <h1>Super Eva's Magic Bus Ride</h1>
+    <div id="hud">
+      <span id="math-level">Math Level: 1</span>
+      <span id="spell-level">Spelling Level: 1</span>
+      <span id="targets">Targets: 11 & E</span>
+    </div>
+  </div>
+
+  <script>
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+    pointLight.position.set(10, 10, 10);
+    scene.add(pointLight);
+    scene.add(new THREE.AmbientLight(0x404040));
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const bubbles = [];
+
+    const state = {
+      mathLevel: 1,
+      spellingLevel: 1,
+      mathTargets: ['11', '9', '7', '13'],
+      letterTargets: ['E', 'B', 'A', 'V'],
+      currentMathTarget: '11',
+      currentLetterTarget: 'E'
+    };
+
+    const popSound = new Audio('pop.mp3');
+    const magicSound = new Audio('magic.mp3');
+    const themeSound = new Audio('eva_theme.mp3');
+    themeSound.loop = true;
+    themeSound.volume = 0.4;
+    window.addEventListener('pointerdown', () => {
+      if (themeSound.paused) {
+        themeSound.play().catch(() => {});
+      }
+    }, { once: true });
+
+    function drawCloud(x, y, z) {
+      const cloud = new THREE.Group();
+      const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+      [
+        [-0.6, 0, 0, 0.5],
+        [0, 0.15, 0, 0.65],
+        [0.65, 0, 0, 0.48]
+      ].forEach(([cx, cy, cz, r]) => {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 24), material);
+        puff.position.set(cx, cy, cz);
+        cloud.add(puff);
+      });
+      cloud.position.set(x, y, z);
+      scene.add(cloud);
+    }
+
+    function createBubble(value, color, x, y, type) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 256;
+      canvas.height = 256;
+
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(128, 128, 120, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.font = 'bold 120px Arial';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(value, 128, 128);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.MeshPhongMaterial({ map: texture, transparent: true });
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), material);
+      sphere.position.set(x, y, 0);
+      sphere.userData = {
+        value,
+        type,
+        popScale: 1,
+        popping: false
+      };
+      scene.add(sphere);
+      bubbles.push(sphere);
+      return sphere;
+    }
+
+    function updateHud() {
+      document.getElementById('math-level').textContent = `Math Level: ${state.mathLevel}`;
+      document.getElementById('spell-level').textContent = `Spelling Level: ${state.spellingLevel}`;
+      document.getElementById('targets').textContent = `Targets: ${state.currentMathTarget} & ${state.currentLetterTarget}`;
+    }
+
+    function advanceTarget(type) {
+      if (type === 'math') {
+        state.mathLevel += 1;
+        state.currentMathTarget = state.mathTargets[(state.mathLevel - 1) % state.mathTargets.length];
+      } else {
+        state.spellingLevel += 1;
+        state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
+      }
+      magicSound.currentTime = 0;
+      magicSound.play().catch(() => {});
+      updateHud();
+    }
+
+    function respawnBubble(mesh) {
+      if (mesh.userData.type === 'math') {
+        mesh.userData.value = state.currentMathTarget;
+      } else {
+        mesh.userData.value = state.currentLetterTarget;
+      }
+      const newX = mesh.userData.type === 'math' ? -2.5 - Math.random() * 2 : 2.5 + Math.random() * 2;
+      const newY = 1.2 + Math.random() * 1.8;
+
+      const newBubble = createBubble(
+        mesh.userData.value,
+        mesh.userData.type === 'math' ? '#7B61FF' : '#FF61B6',
+        newX,
+        newY,
+        mesh.userData.type
+      );
+      newBubble.rotation.y = Math.random() * Math.PI;
+    }
+
+    function handlePointer(event) {
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const active = bubbles.filter((b) => !b.userData.popping);
+      const intersects = raycaster.intersectObjects(active);
+      if (intersects.length === 0) return;
+
+      const hit = intersects[0].object;
+      hit.userData.popping = true;
+
+      popSound.currentTime = 0;
+      popSound.play().catch(() => {});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) {
+        advanceTarget('math');
+      }
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) {
+        advanceTarget('spelling');
+      }
+    }
+
+    for (let i = 0; i < 7; i += 1) {
+      drawCloud(-7 + i * 2.3, 3.8 - (i % 2) * 0.4, -4 - (i % 3));
+    }
+
+    createBubble(state.currentMathTarget, '#7B61FF', -3, 2, 'math');
+    createBubble(state.currentLetterTarget, '#FF61B6', 3, 2, 'spelling');
+
+    camera.position.z = 8;
+    updateHud();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      for (let i = bubbles.length - 1; i >= 0; i -= 1) {
+        const obj = bubbles[i];
+        obj.rotation.y += 0.01;
+        if (obj.userData.popping) {
+          obj.userData.popScale -= 0.08;
+          obj.scale.setScalar(Math.max(obj.userData.popScale, 0));
+          if (obj.userData.popScale <= 0) {
+            scene.remove(obj);
+            bubbles.splice(i, 1);
+            respawnBubble(obj);
+          }
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('pointerdown', handlePointer);
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
