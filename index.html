@@ -1,221 +1,598 @@
 <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-        <title>Super Eva's Magic Bus Ride</title>
-        <style>
-            /* --- CORE VISUALS --- */
-            * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
-            body { 
-                overflow: hidden; 
-                background: linear-gradient(to bottom, #f0f8ff 0%, #fffafa 100%); /* Sharper off-white gradient */
-                font-family: 'Comic Sans MS', sans-serif;
-                touch-action: none; 
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Super Eva's Magic Bus Ride</title>
+  <link rel="icon" href="data:," />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      overflow: hidden;
+      background: #3d5f8f;
+      font-family: "Comic Sans MS", "Trebuchet MS", sans-serif;
+      color: #4b3b6b;
+      touch-action: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #app {
+      position: relative;
+      width: min(100vw, calc(100vh * 9 / 16));
+      height: min(100vh, calc(100vw * 16 / 9));
+      max-height: 100vh;
+      max-width: 100vw;
+      aspect-ratio: 9 / 16;
+      overflow: hidden;
+      background: #87ceeb;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+    #splash-screen {
+      position: absolute;
+      inset: 0;
+      background: url("splash.png") center center / cover no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    #start-button {
+      border: none;
+      background: #ffe44d;
+      color: #5c3d00;
+      font-size: 1.8rem;
+      padding: 16px 40px;
+      border-radius: 999px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(255, 228, 77, 0.5);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    #start-button:focus-visible {
+      outline: 4px solid rgba(255, 255, 255, 0.8);
+      outline-offset: 4px;
+    }
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        box-shadow: 0 12px 30px rgba(255, 228, 77, 0.5);
+      }
+      50% {
+        transform: scale(1.08);
+        box-shadow: 0 16px 40px rgba(255, 228, 77, 0.75);
+      }
+      100% {
+        transform: scale(1);
+        box-shadow: 0 12px 30px rgba(255, 228, 77, 0.5);
+      }
+    }
+    canvas {
+      display: block;
+      position: absolute;
+      inset: 0;
+    }
+    #ui {
+      z-index: 2;
+      pointer-events: none;
+    }
+    #hud {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+    }
+    #title {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.8);
+      padding: 10px 24px;
+      border-radius: 999px;
+      font-size: 1.4rem;
+      color: #6b4fc7;
+      box-shadow: 0 8px 20px rgba(126, 87, 194, 0.2);
+      z-index: 4;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    #letter-popup {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(3rem, 10vw, 6rem);
+      color: #ff6fae;
+      text-shadow: 0 6px 18px rgba(255, 111, 174, 0.5);
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      z-index: 4;
+      pointer-events: none;
+    }
+    #helper {
+      position: absolute;
+      bottom: 18px;
+      width: 100%;
+      text-align: center;
+      font-size: 1rem;
+      color: #5a5a8f;
+      z-index: 4;
+      text-shadow: 0 2px 6px rgba(255, 255, 255, 0.8);
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+  <div id="splash-screen">
+    <button id="start-button" type="button">START GAME</button>
+  </div>
+  <div id="title">Super Eva's Magic Bus Ride</div>
+  <div id="letter-popup"></div>
+  <div id="helper">Tap a bubble to pop it with your magic wand!</div>
+  <canvas id="webgl"></canvas>
+  <canvas id="ui"></canvas>
+  <canvas id="hud"></canvas>
+  </div>
+
+  <script src="three.min.js"></script>
+  <script>
+    let appRoot;
+    let canvas;
+    let uiCanvas;
+    let hudCanvas;
+    let letterPopup;
+    let splashScreen;
+    let startButton;
+    let renderer;
+    let scene;
+    let camera;
+    let uiCtx;
+    let hudCtx;
+    let busGroup;
+    let wandTip;
+    let bubbleLabels = [];
+    let bubbleGeometry;
+    let bubbleMaterial;
+    let loopAudio;
+    let evaThemeAudio;
+    let popAudio;
+    let magicAudio;
+    let isGameStarted = false;
+    let lastTime = 0;
+    let viewportWidth = 0;
+    let viewportHeight = 0;
+
+    const bubbles = [];
+    const poppingBubbles = new Set();
+    const sparkles = [];
+    const magicBursts = [];
+    const clouds = [];
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const targetSequence = ["E", "V", "A"];
+    const speed = 0.04;
+    let sequenceIndex = 0;
+    let easterEggTriggered = false;
+
+    function makeTextSprite(text) {
+      const size = 256;
+      const textCanvas = document.createElement("canvas");
+      textCanvas.width = size;
+      textCanvas.height = size;
+      const ctx = textCanvas.getContext("2d");
+      ctx.fillStyle = "rgba(255, 255, 255, 0.0)";
+      ctx.fillRect(0, 0, size, size);
+      ctx.font = "bold 120px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#6b4fc7";
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 10;
+      ctx.strokeText(text, size / 2, size / 2 + 4);
+      ctx.fillText(text, size / 2, size / 2 + 4);
+
+      const texture = new THREE.CanvasTexture(textCanvas);
+      texture.minFilter = THREE.LinearFilter;
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(1.2, 1.2, 1.2);
+      return sprite;
+    }
+
+    function spawnBubble(existingBubble) {
+      const label = bubbleLabels[Math.floor(Math.random() * bubbleLabels.length)];
+      const bubble = existingBubble || new THREE.Mesh(bubbleGeometry, bubbleMaterial.clone());
+      bubble.material.color.setHSL(Math.random(), 0.4, 0.85);
+      bubble.material.opacity = 0.55;
+      bubble.scale.setScalar(1);
+      bubble.position.set(
+        (Math.random() - 0.5) * 10,
+        1 + Math.random() * 4,
+        -10 - Math.random() * 40
+      );
+      bubble.userData = {
+        label,
+        floatOffset: Math.random() * Math.PI * 2,
+        sprite: bubble.userData ? bubble.userData.sprite : null,
+        popProgress: 0
+      };
+      if (bubble.userData.sprite) {
+        bubble.remove(bubble.userData.sprite);
+      }
+      const sprite = makeTextSprite(label);
+      sprite.position.set(0, 0, 0.6);
+      bubble.add(sprite);
+      bubble.userData.sprite = sprite;
+      if (!existingBubble) {
+        scene.add(bubble);
+        bubbles.push(bubble);
+      }
+    }
+
+    function addSparkles(screenX, screenY) {
+      for (let i = 0; i < 18; i++) {
+        sparkles.push({
+          x: screenX,
+          y: screenY,
+          vx: (Math.random() - 0.5) * 3,
+          vy: (Math.random() - 0.7) * 3,
+          life: 1
+        });
+      }
+    }
+
+    function showLetter(label) {
+      letterPopup.textContent = label;
+      letterPopup.style.opacity = "1";
+      clearTimeout(showLetter._timeout);
+      showLetter._timeout = setTimeout(() => {
+        letterPopup.style.opacity = "0";
+      }, 900);
+    }
+
+    function enterFullscreen() {
+      if (document.fullscreenElement) {
+        return Promise.resolve();
+      }
+      if (document.documentElement.requestFullscreen) {
+        return document.documentElement.requestFullscreen();
+      }
+      return Promise.resolve();
+    }
+
+    function handleTap(event) {
+      if (!isGameStarted) {
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      pointer.x = x * 2 - 1;
+      pointer.y = -(y * 2 - 1);
+
+      raycaster.setFromCamera(pointer, camera);
+
+      let closestBubble = null;
+      let closestDistance = Infinity;
+      bubbles.forEach((bubble) => {
+        if (bubble.userData.popProgress > 0) {
+          return;
+        }
+        const distanceToRay = raycaster.ray.distanceToPoint(bubble.position);
+        if (distanceToRay < 1.4) {
+          const camDistance = bubble.position.distanceTo(camera.position);
+          if (camDistance < closestDistance) {
+            closestDistance = camDistance;
+            closestBubble = bubble;
+          }
+        }
+      });
+
+      if (closestBubble) {
+        const label = closestBubble.userData.label;
+        const vector = closestBubble.position.clone().project(camera);
+        const screenX = (vector.x * 0.5 + 0.5) * viewportWidth;
+        const screenY = (-vector.y * 0.5 + 0.5) * viewportHeight;
+        addSparkles(screenX, screenY);
+        showLetter(label);
+        popAudio.currentTime = 0;
+        popAudio.play().catch(() => {});
+        closestBubble.userData.popProgress = 0.01;
+        poppingBubbles.add(closestBubble);
+        magicBursts.push({
+          start: performance.now(),
+          x: screenX,
+          y: screenY
+        });
+        magicAudio.currentTime = 0;
+        magicAudio.play().catch(() => {});
+
+        if (!easterEggTriggered) {
+          if (label === targetSequence[sequenceIndex]) {
+            sequenceIndex += 1;
+            if (sequenceIndex === targetSequence.length) {
+              easterEggTriggered = true;
+              loopAudio.pause();
+              evaThemeAudio.currentTime = 0;
+              evaThemeAudio.play().catch(() => {});
             }
-    
-            /* --- CENTER STARS --- */
-            #top-center {
-                position: absolute; top: 20px; width: 100%; display: flex;
-                justify-content: center; gap: 40px; pointer-events: none; z-index: 20;
-            }
-            .star-box {
-                position: relative; width: 140px; height: 140px;
-                display: flex; align-items: center; justify-content: center;
-                animation: float 3s ease-in-out infinite;
-            }
-            .star-shape { 
-                position: absolute; font-size: 160px; 
-                filter: drop-shadow(0 4px 10px rgba(0,0,0,0.1)); 
-            }
-            .star-content { 
-                position: relative; z-index: 2; 
-                font-size: 2rem; font-weight: 900; color: white; 
-                text-shadow: 2px 2px 0px rgba(0,0,0,0.2); text-align: center; line-height: 1;
-            }
-            #star-left .star-shape { color: #ffc107; }
-            #star-right .star-shape { color: #fd7e14; }
-    
-            /* --- SIDE BARS --- */
-            .side-panel {
-                position: absolute; top: 50%; transform: translateY(-50%);
-                width: 60px; height: 200px;
-                background: rgba(255,255,255,0.6); border-radius: 30px;
-                border: 2px solid white; overflow: hidden;
-                display: flex; flex-direction: column; justify-content: flex-end;
-            }
-            .side-label {
-                position: absolute; top: -30px; width: 100%; text-align: center;
-                font-weight: bold; color: #d63384; font-size: 0.9rem;
-            }
-            #panel-left { left: 20px; }
-            #panel-right { right: 20px; }
-            .liquid { width: 100%; transition: height 0.5s ease; }
-            #fill-letters { height: 0%; background: #ff00ff; }
-            #fill-numbers { height: 0%; background: #00cc00; }
-    
-            /* --- UI --- */
-            #splash-screen {
-                position: fixed; inset: 0; z-index: 100;
-                background: #f0f8ff;
-                display: flex; flex-direction: column; align-items: center; justify-content: center;
-            }
-            h1 { color: #ff00ff; font-size: 3rem; margin-bottom: 20px; text-align: center; }
-            #start-btn {
-                padding: 20px 60px; font-size: 2rem; font-weight: 900; border-radius: 50px;
-                border: none; background: #ffc107; color: white; cursor: pointer;
-            }
-            canvas { display: block; position: absolute; inset: 0; z-index: 5; }
-            @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
-        </style>
-    </head>
-    <body>
-        <div id="splash-screen">
-            <h1>Super Eva's Magic Ride</h1>
-            <button id="start-btn">PLAY!</button>
-        </div>
-        <div id="top-center">
-            <div id="star-left" class="star-box"><div class="star-shape">★</div><div class="star-content" id="target-word">EVA</div></div>
-            <div id="star-right" class="star-box"><div class="star-shape">★</div><div class="star-content" id="target-num">25</div></div>
-        </div>
-        <div id="panel-left" class="side-panel"><div class="side-label">ABC</div><div id="fill-letters" class="liquid"></div></div>
-        <div id="panel-right" class="side-panel"><div class="side-label">123</div><div id="fill-numbers" class="liquid"></div></div>
-        <canvas id="webgl"></canvas>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-        <script>
-            const audio = {
-                loop: new Audio('loop.mp3'),
-                pop: new Audio('pop.mp3'),
-                magic: new Audio('magic.mp3'),
-                evaTheme: new Audio('eva_theme.mp3')
-            };
-            audio.loop.loop = true;
-    
-            const state = {
-                playing: false, targetWord: "EVA", wordIndex: 0, targetNum: 25,
-                currentSum: 0, scoreLetters: 0, scoreNumbers: 0,
-                wordList: ["EVA", "ASA", "IAN", "MAMA", "POP", "ART", "CAT", "DOG", "BUS"]
-            };
-    
-            let scene, camera, renderer, evaSprite;
-            const bubbles = [], clouds = [];
-    
-            function init() {
-                scene = new THREE.Scene();
-                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-                camera.position.z = 8;
-                renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('webgl'), alpha: true, antialias: true });
-                renderer.setSize(window.innerWidth, window.innerHeight);
-    
-                const amb = new THREE.AmbientLight(0xffffff, 1); scene.add(amb);
-    
-                new THREE.TextureLoader().load('eva.png', (tex) => {
-                    const mat = new THREE.SpriteMaterial({ map: tex });
-                    evaSprite = new THREE.Sprite(mat);
-                    evaSprite.scale.set(4, 4, 1); // Increased size for resolution
-                    evaSprite.position.y = -1.5;
-                    scene.add(evaSprite);
-                });
-    
-                createClouds();
-                window.addEventListener('pointerdown', onTap);
-                document.getElementById('start-btn').addEventListener('click', startGame);
-                animate();
-            }
-    
-            function createClouds() {
-                const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 64;
-                const c = cvs.getContext('2d');
-                c.fillStyle = "white"; // Pure white clouds, no border
-                c.beginPath(); c.arc(64,32,30,0,Math.PI*2); c.fill();
-                c.beginPath(); c.arc(40,32,20,0,Math.PI*2); c.fill();
-                c.beginPath(); c.arc(88,32,20,0,Math.PI*2); c.fill();
-                const tex = new THREE.CanvasTexture(cvs);
-    
-                for(let i=0; i<12; i++) {
-                    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.9 }));
-                    s.scale.set(5, 2.5, 1);
-                    // Spread out in foreground and background
-                    s.position.set((Math.random()-0.5)*20, Math.random()*5, (Math.random()-0.5)*10);
-                    s.userData = { speed: 0.005 + Math.random()*0.01 };
-                    clouds.push(s); scene.add(s);
-                }
-            }
-    
-            function spawnBubble(recycle = null) {
-                const bubble = recycle || new THREE.Mesh(
-                    new THREE.SphereGeometry(0.7, 32, 32),
-                    new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
-                );
-    
-                const isLetter = Math.random() > 0.5;
-                let text = isLetter ? (Math.random() < 0.3 ? state.targetWord[state.wordIndex] : "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random()*26)]) : [1, 2, 3, 4, 5, 10][Math.floor(Math.random()*6)].toString();
-                
-                if (bubble.userData.sprite) bubble.remove(bubble.userData.sprite);
-                const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 128;
-                const ctx = cvs.getContext('2d');
-                ctx.fillStyle = isLetter ? "#ff00ff" : "#00cc00"; // High contrast
-                ctx.font = "bold 90px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-                ctx.fillText(text, 64, 64);
-                const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cvs) }));
-                bubble.add(sprite);
-    
-                bubble.position.set((Math.random()-0.5)*12, -8, (Math.random()-0.5)*5);
-                bubble.userData = { val: text, isLetter, speed: 0.03 + Math.random()*0.02, sprite };
-                if (!recycle) { scene.add(bubble); bubbles.push(bubble); }
-            }
-    
-            function onTap(e) {
-                if (!state.playing) return;
-                const mouse = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
-                const ray = new THREE.Raycaster(); ray.setFromCamera(mouse, camera);
-                const hits = ray.intersectObjects(bubbles);
-                if (hits.length > 0) handleHit(hits[0].object);
-            }
-    
-            function handleHit(b) {
-                const val = b.userData.val;
-                if (b.userData.isLetter) {
-                    if (val === state.targetWord[state.wordIndex]) {
-                        state.wordIndex++; audio.magic.play();
-                        if (state.wordIndex >= state.targetWord.length) {
-                            state.scoreLetters++; state.wordIndex = 0;
-                            audio.evaTheme.play(); // Play theme on full word
-                            state.targetWord = state.wordList[Math.floor(Math.random()*state.wordList.length)];
-                        }
-                    } else { audio.pop.play(); }
-                } else {
-                    state.currentSum += parseInt(val); audio.magic.play();
-                    if (state.currentSum >= state.targetNum) {
-                        if (state.currentSum === state.targetNum) { state.scoreNumbers++; audio.evaTheme.play(); }
-                        state.currentSum = 0; state.targetNum = [10, 15, 20, 25][Math.floor(Math.random()*4)];
-                    }
-                }
-                spawnBubble(b); updateHUD();
-            }
-    
-            function updateHUD() {
-                document.getElementById('target-word').innerText = state.targetWord;
-                document.getElementById('target-num').innerText = `${state.currentSum}/${state.targetNum}`;
-                document.getElementById('fill-letters').style.height = (state.scoreLetters * 10) + "%";
-                document.getElementById('fill-numbers').style.height = (state.scoreNumbers * 10) + "%";
-            }
-    
-            function startGame() { 
-                document.getElementById('splash-screen').style.display = 'none'; 
-                state.playing = true; audio.loop.play();
-                for(let i=0; i<15; i++) spawnBubble();
-            }
-    
-            function animate() {
-                requestAnimationFrame(animate);
-                if (!state.playing) return;
-                bubbles.forEach(b => { b.position.y += b.userData.speed; if(b.position.y > 6) spawnBubble(b); });
-                clouds.forEach(c => { c.position.x += c.userData.speed; if(c.position.x > 10) c.position.x = -10; });
-                if (evaSprite) evaSprite.position.y = -1.5 + Math.sin(Date.now()*0.002)*0.1;
-                renderer.render(scene, camera);
-            }
-            init();
-        </script>
-    </body>
-    </html>
+          } else if (label === targetSequence[0]) {
+            sequenceIndex = 1;
+          } else {
+            sequenceIndex = 0;
+          }
+        }
+      }
+    }
+
+    function resize() {
+      viewportWidth = appRoot.clientWidth;
+      viewportHeight = appRoot.clientHeight;
+      renderer.setSize(viewportWidth, viewportHeight);
+      camera.aspect = viewportWidth / viewportHeight;
+      camera.updateProjectionMatrix();
+      uiCanvas.width = viewportWidth;
+      uiCanvas.height = viewportHeight;
+      hudCanvas.width = viewportWidth;
+      hudCanvas.height = viewportHeight;
+    }
+
+    function animate(time) {
+      requestAnimationFrame(animate);
+      const delta = (time - lastTime) / 16.666;
+      lastTime = time;
+
+      if (!isGameStarted) {
+        renderer.render(scene, camera);
+        return;
+      }
+
+      clouds.forEach((cloud) => {
+        cloud.position.z += speed * 10 * cloud.userData.speedFactor * delta;
+        if (cloud.position.z > camera.position.z + 2) {
+          cloud.position.z = -70 - Math.random() * 40;
+          cloud.position.x = (Math.random() - 0.5) * 20;
+          cloud.position.y = 2 + Math.random() * 6;
+          cloud.scale.set(6 + Math.random() * 6, 3 + Math.random() * 3, 1);
+        }
+      });
+
+      bubbles.forEach((bubble) => {
+        if (bubble.userData.popProgress <= 0) {
+          bubble.position.z += speed * 1.2 * delta;
+        }
+        bubble.position.y += Math.sin(time * 0.002 + bubble.userData.floatOffset) * 0.005;
+        if (bubble.position.z > camera.position.z + 1) {
+          spawnBubble(bubble);
+        }
+      });
+
+      poppingBubbles.forEach((bubble) => {
+        bubble.userData.popProgress += 0.08;
+        const scale = Math.max(0, 1 - bubble.userData.popProgress);
+        bubble.scale.setScalar(scale);
+        bubble.material.opacity = Math.max(0, 0.55 * scale);
+        if (bubble.userData.popProgress >= 1) {
+          poppingBubbles.delete(bubble);
+          spawnBubble(bubble);
+        }
+      });
+
+      const hoverOffset = Math.sin(time * 0.003) * 0.08;
+      busGroup.position.y = -0.1 + hoverOffset;
+      wandTip.scale.setScalar(1 + Math.sin(time * 0.01) * 0.1);
+      const cameraTarget = new THREE.Vector3(0, 1.6 + hoverOffset, 5.5);
+      camera.position.lerp(cameraTarget, 0.06);
+      camera.lookAt(0, 1, 0);
+
+      uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+      sparkles.forEach((sparkle) => {
+        sparkle.x += sparkle.vx;
+        sparkle.y += sparkle.vy;
+        sparkle.life -= 0.03;
+      });
+      for (let i = sparkles.length - 1; i >= 0; i--) {
+        if (sparkles[i].life <= 0) {
+          sparkles.splice(i, 1);
+        }
+      }
+      sparkles.forEach((sparkle) => {
+        uiCtx.beginPath();
+        uiCtx.fillStyle = `rgba(255, 215, 130, ${sparkle.life})`;
+        uiCtx.arc(sparkle.x, sparkle.y, 4, 0, Math.PI * 2);
+        uiCtx.fill();
+      });
+
+      hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+      const now = performance.now();
+      const wandWorld = new THREE.Vector3();
+      wandTip.getWorldPosition(wandWorld);
+      const wandScreen = wandWorld.clone().project(camera);
+      const wandScreenX = (wandScreen.x * 0.5 + 0.5) * viewportWidth;
+      const wandScreenY = (-wandScreen.y * 0.5 + 0.5) * viewportHeight;
+      for (let i = magicBursts.length - 1; i >= 0; i--) {
+        const burst = magicBursts[i];
+        const age = (now - burst.start) / 450;
+        if (age > 1) {
+          magicBursts.splice(i, 1);
+          continue;
+        }
+        const alpha = 1 - age;
+        hudCtx.strokeStyle = `rgba(255, 221, 122, ${alpha})`;
+        hudCtx.lineWidth = 4;
+        hudCtx.beginPath();
+        hudCtx.moveTo(wandScreenX, wandScreenY);
+        hudCtx.lineTo(burst.x, burst.y);
+        hudCtx.stroke();
+        hudCtx.fillStyle = `rgba(255, 182, 233, ${alpha})`;
+        hudCtx.beginPath();
+        hudCtx.arc(burst.x, burst.y, 12 + age * 8, 0, Math.PI * 2);
+        hudCtx.fill();
+      }
+      hudCtx.beginPath();
+      hudCtx.strokeStyle = "rgba(255,255,255,0.7)";
+      hudCtx.lineWidth = 3;
+      hudCtx.arc(viewportWidth / 2, viewportHeight / 2, 20, 0, Math.PI * 2);
+      hudCtx.stroke();
+
+      renderer.render(scene, camera);
+    }
+
+    function init() {
+      appRoot = document.getElementById("app");
+      canvas = document.getElementById("webgl");
+      uiCanvas = document.getElementById("ui");
+      hudCanvas = document.getElementById("hud");
+      letterPopup = document.getElementById("letter-popup");
+      splashScreen = document.getElementById("splash-screen");
+      startButton = document.getElementById("start-button");
+
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio || 1);
+      renderer.setSize(appRoot.clientWidth, appRoot.clientHeight);
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0xf7e9ff, 6, 32);
+
+      camera = new THREE.PerspectiveCamera(60, appRoot.clientWidth / appRoot.clientHeight, 0.1, 100);
+      camera.position.set(0, 1.5, 5);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+      scene.add(ambient);
+      const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+      mainLight.position.set(4, 6, 5);
+      scene.add(mainLight);
+
+      uiCtx = uiCanvas.getContext("2d");
+      hudCtx = hudCanvas.getContext("2d");
+
+      const skyGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(30, 32, 32),
+        new THREE.MeshBasicMaterial({ color: 0xe6f7ff, side: THREE.BackSide })
+      );
+      scene.add(skyGlow);
+
+      busGroup = new THREE.Group();
+      scene.add(busGroup);
+
+      const evaTexture = new THREE.TextureLoader().load("eva.png");
+      const evaSprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: evaTexture, transparent: true })
+      );
+      evaSprite.scale.set(0.5, 0.5, 0.5);
+      evaSprite.position.set(0, 1.1, 0);
+      busGroup.add(evaSprite);
+
+      // Create the magic point (invisible source for sparkles)
+      wandTip = new THREE.Mesh(
+        new THREE.SphereGeometry(0.05, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      wandTip.position.set(0.4, 1.1, 0);
+      busGroup.add(wandTip);
+
+      busGroup.position.set(0, -0.2, 3.5);
+
+      const cloudCanvas = document.createElement("canvas");
+      cloudCanvas.width = 256;
+      cloudCanvas.height = 128;
+      const cloudCtx = cloudCanvas.getContext("2d");
+      cloudCtx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      cloudCtx.beginPath();
+      cloudCtx.ellipse(70, 70, 55, 35, 0, 0, Math.PI * 2);
+      cloudCtx.ellipse(120, 55, 65, 45, 0, 0, Math.PI * 2);
+      cloudCtx.ellipse(170, 70, 50, 32, 0, 0, Math.PI * 2);
+      cloudCtx.fill();
+      const cloudTexture = new THREE.CanvasTexture(cloudCanvas);
+
+      clouds.length = 0;
+      const cloudCount = 18;
+      for (let i = 0; i < cloudCount; i++) {
+        const cloud = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: cloudTexture, transparent: true, opacity: 0.85 })
+        );
+        cloud.scale.set(6 + Math.random() * 6, 3 + Math.random() * 3, 1);
+        cloud.position.set(
+          (Math.random() - 0.5) * 20,
+          2 + Math.random() * 6,
+          -10 - Math.random() * 60
+        );
+        cloud.userData = { speedFactor: 0.4 + Math.random() * 0.6 };
+        clouds.push(cloud);
+        scene.add(cloud);
+      }
+
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+      const numbers = Array.from({ length: 20 }, (_, i) => String(i + 1));
+      bubbleLabels = [...letters, ...numbers];
+
+      bubbleGeometry = new THREE.SphereGeometry(0.45, 20, 20);
+      bubbleMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.55,
+        roughness: 0.2,
+        metalness: 0.1
+      });
+
+      bubbles.length = 0;
+      poppingBubbles.clear();
+      const bubbleCount = 18;
+      for (let i = 0; i < bubbleCount; i++) {
+        spawnBubble();
+      }
+
+      loopAudio = new Audio("loop.mp3");
+      loopAudio.loop = true;
+      evaThemeAudio = new Audio("eva_theme.mp3");
+      popAudio = new Audio("pop.mp3");
+      magicAudio = new Audio("magic.mp3");
+
+      isGameStarted = false;
+      lastTime = 0;
+      sequenceIndex = 0;
+      easterEggTriggered = false;
+
+      startButton.addEventListener("click", startGame);
+      startButton.addEventListener("pointerdown", startGame);
+      splashScreen.addEventListener("pointerdown", (event) => {
+        if (event.target === startButton) {
+          return;
+        }
+        startGame();
+      });
+      window.addEventListener("keydown", (event) => {
+        if (!isGameStarted && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          startGame();
+        }
+      });
+      window.addEventListener("pointerdown", handleTap);
+      window.addEventListener("resize", resize);
+      resize();
+      animate(0);
+    }
+
+    function startGame() {
+      if (isGameStarted) {
+        return;
+      }
+      isGameStarted = true;
+      splashScreen.style.display = "none";
+      enterFullscreen();
+      loopAudio.currentTime = 0;
+      loopAudio.play().catch(() => {});
+    }
+
+    init();
+  </script>
+</body>
+</html>
