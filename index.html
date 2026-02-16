@@ -35,6 +35,8 @@
       background: rgba(255, 255, 255, 0.85); border-radius: 12px; color: #4f3fb2; font-weight: 700;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1); font-size: 1.2rem;
     }
+    .laneBtn { -webkit-tap-highlight-color: transparent; }
+    .laneBtn:active { background: rgba(255,255,255,0.06); }
     canvas { display: block; position: absolute; inset: 0; z-index: 5; }
   </style>
 </head>
@@ -52,6 +54,20 @@
     </div>
   </div>
 
+  <div id="touch-lanes" style="
+    position:fixed; inset:0; z-index:11;
+    display:none;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+  ">
+    <button class="laneBtn" data-lane="-1" aria-label="Left lane"
+      style="background:transparent; border:none; outline:none;"></button>
+    <button class="laneBtn" data-lane="0" aria-label="Middle lane"
+      style="background:transparent; border:none; outline:none;"></button>
+    <button class="laneBtn" data-lane="1" aria-label="Right lane"
+      style="background:transparent; border:none; outline:none;"></button>
+  </div>
+
   <script>
     // --- AUDIO SETUP ---
     const audio = {
@@ -65,6 +81,7 @@
     // --- GAME LOGIC STATE ---
     const state = {
       playing: false,
+      lane: 0,
       mathLevel: 1, spellingLevel: 1,
       mathTargets: ['11', '9', '7', '13'],
       letterTargets: ['E', 'V', 'A', 'B'],
@@ -89,7 +106,10 @@
     const pointer = new THREE.Vector2();
     const bubbles = [];
     const clouds = [];
+    const laneSpacing = 3;
+    const laneTolerance = 2.8;
     let evaSprite;
+    let fullscreenTried = false;
 
     // --- LOAD EVA SOUL ---
     new THREE.TextureLoader().load('eva.png', (tex) => {
@@ -186,17 +206,8 @@
       newBubble.rotation.y = Math.random() * Math.PI;
     }
 
-    function handlePointer(event) {
-      if (!state.playing) return;
-      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-
-      const active = bubbles.filter((b) => !b.userData.popping);
-      const intersects = raycaster.intersectObjects(active);
-      if (intersects.length === 0) return;
-
-      const hit = intersects[0].object;
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
       hit.userData.popping = true;
 
       audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
@@ -205,19 +216,88 @@
       if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
     }
 
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
+    }
+
+    function handlePointer(event) {
+      if (!state.playing) return;
+      if (event.target.closest && event.target.closest('#touch-lanes')) return;
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const active = bubbles.filter((b) => !b.userData.popping);
+      const intersects = raycaster.intersectObjects(active);
+      if (intersects.length === 0) return;
+      popBubble(intersects[0].object);
+    }
+
+    async function requestFullscreenSafe() {
+      const el = document.documentElement;
+      try {
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } catch (_) {}
+    }
+
+    function lockLandscapeSafe() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (_) {}
+    }
+
     // --- INITIALIZE ---
     createBubble(state.currentMathTarget, '#7B61FF', -3, -2, 'math');
     createBubble(state.currentLetterTarget, '#FF61B6', 3, -4, 'spelling');
     updateHud();
 
-    function startGame() {
+    async function startGame() {
+        await requestFullscreenSafe();
+        lockLandscapeSafe();
         document.getElementById('splash-screen').style.display = 'none';
         document.getElementById('ui').style.display = 'block';
+        document.getElementById('touch-lanes').style.display = 'grid';
         state.playing = true;
         audio.loop.play().catch(()=>{});
     }
 
+    const touchLanes = document.getElementById('touch-lanes');
+    touchLanes.addEventListener('pointerdown', (e) => {
+      const btn = e.target.closest('.laneBtn');
+      if (!btn || !state.playing) return;
+      e.preventDefault();
+
+      const lane = Number(btn.dataset.lane);
+      state.lane = lane;
+      if (evaSprite) evaSprite.position.x = lane * laneSpacing;
+
+      const target = findClosestBubbleInLane(lane);
+      if (target) popBubble(target);
+    }, { passive: false });
+
     document.getElementById('start-btn').addEventListener('click', startGame);
+    window.addEventListener('pointerdown', async () => {
+      if (fullscreenTried) return;
+      fullscreenTried = true;
+      await requestFullscreenSafe();
+      lockLandscapeSafe();
+    }, { once: true });
     window.addEventListener('pointerdown', handlePointer);
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
