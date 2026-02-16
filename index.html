@@ -19,23 +19,13 @@
     #splash-screen {
         position: fixed; inset: 0; z-index: 100;
         background: #87ceeb url('splash.png') center/cover no-repeat;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        display: flex; align-items: flex-end; justify-content: center;
+        padding-bottom: max(8vh, 48px);
     }
-    h1 { color: #ffd9ff; font-size: 2.4rem; margin-bottom: 16px; text-align: center; text-shadow: 2px 2px 0px rgba(0,0,0,0.45); }
-    #splash-content {
-        background: rgba(8, 16, 40, 0.6);
-        border: 2px solid rgba(255,255,255,0.25);
-        border-radius: 24px;
-        padding: 18px 20px 22px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-    }
-    #splash-art { width: min(60vw, 260px); height: auto; border-radius: 16px; }
     #start-btn {
         padding: 20px 60px; font-size: 2rem; font-weight: 900; border-radius: 50px;
-        border: none; background: #ffc107; color: white; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        border: none; background: #ffc107; color: white; cursor: pointer; box-shadow: 0 8px 16px rgba(0,0,0,0.35);
+        margin: 0 auto;
     }
     
     #ui {
@@ -53,11 +43,7 @@
 </head>
 <body>
   <div id="splash-screen">
-    <div id="splash-content">
-      <img id="splash-art" src="splash.png" alt="Super Eva splash art">
-      <h1>Super Eva's Magic Ride</h1>
-      <button id="start-btn">PLAY!</button>
-    </div>
+    <button id="start-btn">PLAY!</button>
   </div>
   
   <div id="ui">
@@ -155,6 +141,28 @@
     createMovingClouds();
 
     // --- BUBBLE & HUD BRAINS ---
+    const BUBBLE_RADIUS = 0.92;
+
+    function drawBubbleLabel(ctx, value) {
+      const text = String(value);
+      const maxWidth = 160;
+      let fontSize = 112;
+
+      ctx.font = `bold ${fontSize}px Arial`;
+      while (fontSize > 64 && ctx.measureText(text).width > maxWidth) {
+        fontSize -= 4;
+        ctx.font = `bold ${fontSize}px Arial`;
+      }
+
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+      ctx.lineWidth = 8;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeText(text, 128, 128);
+      ctx.fillText(text, 128, 128);
+    }
+
     function createBubble(value, color, x, y, type) {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -162,14 +170,11 @@
 
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(128, 128, 120, 0, Math.PI * 2); ctx.fill();
-
-      ctx.font = 'bold 120px Arial'; ctx.fillStyle = 'white';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(value, 128, 128);
+      drawBubbleLabel(ctx, value);
 
       const texture = new THREE.CanvasTexture(canvas);
       const material = new THREE.MeshPhongMaterial({ map: texture, transparent: true, opacity: 0.9 });
-      const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), material);
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(BUBBLE_RADIUS, 32, 32), material);
       sphere.position.set(x, y, 0);
       
       // Speed logic: Float up slowly
@@ -228,6 +233,33 @@
       return best;
     }
 
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
+      hit.userData.popping = true;
+
+      audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) advanceTarget('math');
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
+    }
+
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
+    }
+
     function handlePointer(event) {
       if (!state.playing) return;
       if (event.target.closest && event.target.closest('#touch-lanes')) return;
@@ -258,7 +290,12 @@
     }
 
 
-    async function startGame() {
+    let startRequested = false;
+    async function startGame(event) {
+        if (event) event.preventDefault();
+        if (startRequested || state.playing) return;
+        startRequested = true;
+
         await requestFullscreenSafe();
         lockPortraitSafe();
         document.getElementById('splash-screen').style.display = 'none';
@@ -282,7 +319,9 @@
       if (target) popBubble(target);
     }, { passive: false });
 
-    document.getElementById('start-btn').addEventListener('click', startGame);
+    const startBtn = document.getElementById('start-btn');
+    startBtn.addEventListener('click', startGame);
+    startBtn.addEventListener('pointerdown', startGame, { passive: false });
     window.addEventListener('pointerdown', async () => {
       if (fullscreenTried) return;
       fullscreenTried = true;
