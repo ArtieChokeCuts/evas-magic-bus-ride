@@ -185,11 +185,6 @@
       return sphere;
     }
 
-    function updateHud() {
-      document.getElementById('math-level').textContent = `Math Level: ${state.mathLevel}`;
-      document.getElementById('spell-level').textContent = `Spelling Level: ${state.spellingLevel}`;
-      document.getElementById('targets').textContent = `Targets: ${state.currentMathTarget} & ${state.currentLetterTarget}`;
-    }
 
     function advanceTarget(type) {
       if (type === 'math') {
@@ -210,20 +205,32 @@
       updateHud();
     }
 
-    function respawnBubble(mesh) {
-      if (mesh.userData.type === 'math') mesh.userData.value = state.currentMathTarget;
-      else mesh.userData.value = state.currentLetterTarget;
-      
-      // Spawn at the bottom so it floats up
-      const newX = mesh.userData.type === 'math' ? -2.5 - Math.random() * 2 : 2.5 + Math.random() * 2;
-      const newY = -6; 
 
-      const newBubble = createBubble(
-        mesh.userData.value,
-        mesh.userData.type === 'math' ? '#7B61FF' : '#FF61B6',
-        newX, newY, mesh.userData.type
-      );
-      newBubble.rotation.y = Math.random() * Math.PI;
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
+      hit.userData.popping = true;
+
+      audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) advanceTarget('math');
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
+    }
+
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
     }
 
     function popBubble(hit) {
@@ -282,10 +289,6 @@
       } catch (_) {}
     }
 
-    // --- INITIALIZE ---
-    createBubble(state.currentMathTarget, '#7B61FF', -3, -2, 'math');
-    createBubble(state.currentLetterTarget, '#FF61B6', 3, -4, 'spelling');
-    updateHud();
 
     let startRequested = false;
     async function startGame(event) {
@@ -372,7 +375,5 @@
       }
       renderer.render(scene, camera);
     }
-    animate();
-  </script>
-</body>
-</html>
+    audio.evaTheme.play();
+  }
