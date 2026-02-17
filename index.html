@@ -141,6 +141,28 @@
     createMovingClouds();
 
     // --- BUBBLE & HUD BRAINS ---
+    const BUBBLE_RADIUS = 0.92;
+
+    function drawBubbleLabel(ctx, value) {
+      const text = String(value);
+      const maxWidth = 160;
+      let fontSize = 112;
+
+      ctx.font = `bold ${fontSize}px Arial`;
+      while (fontSize > 64 && ctx.measureText(text).width > maxWidth) {
+        fontSize -= 4;
+        ctx.font = `bold ${fontSize}px Arial`;
+      }
+
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+      ctx.lineWidth = 8;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeText(text, 128, 128);
+      ctx.fillText(text, 128, 128);
+    }
+
     function createBubble(value, color, x, y, type) {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -148,14 +170,11 @@
 
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(128, 128, 120, 0, Math.PI * 2); ctx.fill();
-
-      ctx.font = 'bold 120px Arial'; ctx.fillStyle = 'white';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(value, 128, 128);
+      drawBubbleLabel(ctx, value);
 
       const texture = new THREE.CanvasTexture(canvas);
       const material = new THREE.MeshPhongMaterial({ map: texture, transparent: true, opacity: 0.9 });
-      const sphere = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), material);
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(BUBBLE_RADIUS, 32, 32), material);
       sphere.position.set(x, y, 0);
       
       // Speed logic: Float up slowly
@@ -166,11 +185,6 @@
       return sphere;
     }
 
-    function updateHud() {
-      document.getElementById('math-level').textContent = `Math Level: ${state.mathLevel}`;
-      document.getElementById('spell-level').textContent = `Spelling Level: ${state.spellingLevel}`;
-      document.getElementById('targets').textContent = `Targets: ${state.currentMathTarget} & ${state.currentLetterTarget}`;
-    }
 
     function advanceTarget(type) {
       if (type === 'math') {
@@ -191,20 +205,86 @@
       updateHud();
     }
 
-    function respawnBubble(mesh) {
-      if (mesh.userData.type === 'math') mesh.userData.value = state.currentMathTarget;
-      else mesh.userData.value = state.currentLetterTarget;
-      
-      // Spawn at the bottom so it floats up
-      const newX = mesh.userData.type === 'math' ? -2.5 - Math.random() * 2 : 2.5 + Math.random() * 2;
-      const newY = -6; 
 
-      const newBubble = createBubble(
-        mesh.userData.value,
-        mesh.userData.type === 'math' ? '#7B61FF' : '#FF61B6',
-        newX, newY, mesh.userData.type
-      );
-      newBubble.rotation.y = Math.random() * Math.PI;
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
+      hit.userData.popping = true;
+
+      audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) advanceTarget('math');
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
+    }
+
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
+    }
+
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
+      hit.userData.popping = true;
+
+      audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) advanceTarget('math');
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
+    }
+
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
+    }
+
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
+      hit.userData.popping = true;
+
+      audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
+
+      if (hit.userData.type === 'math' && hit.userData.value === state.currentMathTarget) advanceTarget('math');
+      if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
+    }
+
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
     }
 
     function popBubble(hit) {
@@ -263,10 +343,6 @@
       } catch (_) {}
     }
 
-    // --- INITIALIZE ---
-    createBubble(state.currentMathTarget, '#7B61FF', -3, -2, 'math');
-    createBubble(state.currentLetterTarget, '#FF61B6', 3, -4, 'spelling');
-    updateHud();
 
     let startRequested = false;
     async function startGame(event) {
@@ -281,6 +357,10 @@
         document.getElementById('touch-lanes').style.display = 'grid';
         state.playing = true;
         audio.loop.play().catch(()=>{});
+
+        // Fire-and-forget mobile display improvements.
+        requestFullscreenSafe();
+        lockPortraitSafe();
     }
 
     const touchLanes = document.getElementById('touch-lanes');
@@ -353,7 +433,5 @@
       }
       renderer.render(scene, camera);
     }
-    animate();
-  </script>
-</body>
-</html>
+    audio.evaTheme.play();
+  }
