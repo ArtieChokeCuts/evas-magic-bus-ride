@@ -8,20 +8,32 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
   <style>
-    /* --- CORE VISUALS & MASSIVE UI --- */
     * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     body { 
         overflow: hidden; 
-        background: #87ceeb; /* Restored sky blue */
+        background: #87ceeb; 
         font-family: 'Comic Sans MS', 'Nunito', sans-serif; 
         touch-action: none; 
     }
 
     #splash-screen {
         position: fixed; inset: 0; z-index: 100;
-        background: #87ceeb url('splash.png') center/cover no-repeat; /* Restored splash.png */
+        background: #87ceeb url('splash.png') center/cover no-repeat; 
         display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-        padding-bottom: max(12vh, 60px);
+        padding-bottom: max(10vh, 40px);
+    }
+
+    #menu {
+        display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px;
+        width: 85%; max-width: 400px;
+    }
+    
+    select {
+        appearance: none; -webkit-appearance: none;
+        padding: 15px 20px; font-size: 1.4rem; font-weight: 900; font-family: 'Comic Sans MS', sans-serif;
+        background: rgba(255, 255, 255, 0.9); border: 3px solid #ff007f; border-radius: 20px;
+        color: #4a2377; box-shadow: 0 8px 20px rgba(0,0,0,0.3); text-align: center;
+        outline: none; cursor: pointer;
     }
     
     #start-btn {
@@ -33,17 +45,16 @@
         transition: transform 0.1s;
     }
     #start-btn:active { transform: scale(0.95); }
+    #start-btn:disabled { filter: grayscale(1); cursor: not-allowed; }
     
     #ui { 
         position: absolute; top: 15px; width: 100%; display: none; z-index: 10;
         display: flex; justify-content: center; pointer-events: none;
     }
     
-    /* Massive Glassmorphism HUD */
     #hud {
       display: flex; justify-content: space-between; align-items: center; width: 95%; max-width: 800px;
       padding: 15px 30px;
-      /* Darkened the glass slightly so white text pops against the bright sky blue */
       background: rgba(0, 0, 0, 0.2); border-radius: 30px; 
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
       border: 2px solid rgba(255, 255, 255, 0.5);
@@ -57,28 +68,31 @@
         display: inline-block;
     }
 
-    .laneBtn { -webkit-tap-highlight-color: transparent; pointer-events: auto; }
-    .laneBtn:active { background: rgba(255,255,255,0.05); }
     canvas { display: block; position: absolute; inset: 0; z-index: 5; }
   </style>
 </head>
 <body>
   <div id="splash-screen">
-    <button id="start-btn">RIDE!</button>
+    <div id="menu">
+      <select id="math-select">
+        <option value="1">Count: 1 - 10</option>
+        <option value="11">Count: 11 - 25</option>
+      </select>
+      <select id="spell-select">
+        <option value="1">Spell: E-V-A</option>
+        <option value="4">Spell: Alphabet</option>
+        <option value="30">Spell: Word Bank</option>
+      </select>
+    </div>
+    <button id="start-btn" disabled>LOADING...</button>
   </div>
   
   <div id="ui" style="display:none;">
     <div id="hud">
       <span id="math-level">Math: 1</span>
-      <span id="targets">11 & E</span>
+      <span id="targets">-</span>
       <span id="spell-level">Spell: 1</span>
     </div>
-  </div>
-
-  <div id="touch-lanes" style="position:fixed; inset:0; z-index:11; display:none; grid-template-columns: 1fr 1fr 1fr; gap: 0;">
-    <button class="laneBtn" data-lane="-1" aria-label="Left lane" style="background:transparent; border:none; outline:none;"></button>
-    <button class="laneBtn" data-lane="0" aria-label="Middle lane" style="background:transparent; border:none; outline:none;"></button>
-    <button class="laneBtn" data-lane="1" aria-label="Right lane" style="background:transparent; border:none; outline:none;"></button>
   </div>
 
   <script>
@@ -89,13 +103,23 @@
     };
     audio.loop.loop = true;
 
+    audio.evaTheme.addEventListener('ended', () => {
+        if (state.playing) {
+            audio.loop.currentTime = 0; 
+            audio.loop.play().catch(()=>{});
+        }
+    });
+
     // --- GAME LOGIC STATE ---
     const state = {
-      playing: false, lane: 0, mathLevel: 1, spellingLevel: 1,
-      mathTargets: ['1', '2', '3', '4', '5', '2', '4', '6', '10', '20'], 
-      letterTargets: ['E', 'V', 'A', 'A', 'S', 'A', 'B', 'U', 'S'],
+      playing: false, mathLevel: 1, spellingLevel: 1,
+      mathTargets: Array.from({length: 25}, (_, i) => (i + 1).toString()), 
+      letterTargets: [
+          'E', 'V', 'A', 
+          ...('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')), 
+          'A', 'S', 'A', 'B', 'U', 'S', 'D', 'O', 'G', 'C', 'A', 'T'
+      ],
       currentMathTarget: '1', currentLetterTarget: 'E',
-      
       mathColors: [0x00ecec, 0x0088ff, 0x7b61ff, 0xffaa00, 0xff0055],
       spellColors: [0xff00ff, 0xff5500, 0xffcc00, 0x00ff55, 0x00ccff]
     };
@@ -109,7 +133,6 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // --- STUDIO LIGHTING (Boosted for bright sky) ---
     const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.9);
     scene.add(hemiLight);
     
@@ -117,21 +140,19 @@
     dirLight.position.set(5, 10, 8);
     scene.add(dirLight);
 
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
     const bubbles = [];
     const clouds = [];
     const bursts = [];
-    
-    // TIGHTENED FOR MOBILE PORTRAIT VIEW
-    const laneSpacing = 2.2; 
-    const laneTolerance = 1.8;
     
     let evaSprite;
     let fullscreenTried = false;
     let gameFont = null;
 
-    // --- MAGIC STARDUST PARTICLE ENGINE ---
+    // Free Movement Tracker
+    const targetEvaPos = new THREE.Vector3(0, -2, 0);
+    let isDragging = false;
+
+    // --- MAGIC STARDUST ---
     const starGeo = new THREE.BufferGeometry();
     const starCount = 150;
     const posArray = new Float32Array(starCount * 3);
@@ -153,7 +174,6 @@
     const starMesh = new THREE.Points(starGeo, starMat);
     scene.add(starMesh);
 
-    // --- BURST EXPLOSION LOGIC ---
     function createBurst(x, y, colorHex) {
         const burstGroup = new THREE.Group();
         burstGroup.position.set(x, y, 0);
@@ -175,7 +195,6 @@
         bursts.push(burstGroup);
     }
 
-    // --- MEMORY MANAGEMENT ---
     function disposeGroup(group) {
         group.children.forEach(child => {
             if (child.geometry) child.geometry.dispose();
@@ -195,7 +214,6 @@
         scene.add(evaSprite);
     });
 
-    // --- LOAD CLOUDS ---
     function createMovingClouds() {
         const ccvs = document.createElement('canvas'); ccvs.width = 256; ccvs.height = 128;
         const c = ccvs.getContext('2d');
@@ -215,13 +233,10 @@
     }
     createMovingClouds();
 
-    // --- 3D TARGET BRAINS ---
     function createBubble(value, colorHex, x, y, type) {
       if (!gameFont) return null;
-
       const group = new THREE.Group();
 
-      // SCALED DOWN TEXT FOR MOBILE
       const textGeo = new THREE.TextGeometry(value.toString(), {
         font: gameFont, size: 0.9, height: 0.2, 
         curveSegments: 12, bevelEnabled: true,
@@ -232,19 +247,13 @@
       const xOffset = -0.5 * (textGeo.boundingBox.max.x - textGeo.boundingBox.min.x);
       const yOffset = -0.5 * (textGeo.boundingBox.max.y - textGeo.boundingBox.min.y);
       
-      const textMat = new THREE.MeshStandardMaterial({ 
-          color: 0xffffff, metalness: 0.6, roughness: 0.2 
-      });
+      const textMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.2 });
       const textMesh = new THREE.Mesh(textGeo, textMat);
       textMesh.position.set(xOffset, yOffset, 0);
       group.add(textMesh);
 
-      // SCALED DOWN RING FOR MOBILE
       const ringGeo = new THREE.TorusGeometry(1.2, 0.1, 16, 64);
-      const ringMat = new THREE.MeshBasicMaterial({ 
-        color: colorHex, transparent: true, opacity: 0.8,
-        blending: THREE.AdditiveBlending 
-      });
+      const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       group.add(ringMesh);
 
@@ -264,11 +273,10 @@
       return group;
     }
 
-    // --- HUD ANIMATION & LOGIC ---
     function pulseHUD(id) {
         const el = document.getElementById(id);
         el.style.transform = 'scale(1.4)';
-        el.style.color = '#ffeb3b'; // Flash gold
+        el.style.color = '#ffeb3b'; 
         setTimeout(() => {
             el.style.transform = 'scale(1)';
             el.style.color = '#ffffff';
@@ -279,7 +287,6 @@
       document.getElementById('math-level').textContent = `Math: ${state.mathLevel}`;
       document.getElementById('spell-level').textContent = `Spell: ${state.spellingLevel}`;
       document.getElementById('targets').textContent = `${state.currentMathTarget} & ${state.currentLetterTarget}`;
-      
       if (pulseId) pulseHUD(pulseId);
       pulseHUD('targets'); 
     }
@@ -311,13 +318,11 @@
     function respawnBubble(group) {
       const type = group.userData.type;
       const val = type === 'math' ? state.currentMathTarget : state.currentLetterTarget;
-      
       const colorArr = type === 'math' ? state.mathColors : state.spellColors;
       const level = type === 'math' ? state.mathLevel : state.spellingLevel;
       const activeColor = colorArr[(level - 1) % colorArr.length];
 
-      // Math exclusively on the Left (-laneSpacing), Spelling on the Right (+laneSpacing)
-      const newX = type === 'math' ? -laneSpacing : laneSpacing;
+      const newX = type === 'math' ? -2.2 - Math.random() * 1.5 : 2.2 + Math.random() * 1.5;
       const newY = -8; 
 
       createBubble(val, activeColor, newX, newY, type);
@@ -334,36 +339,37 @@
       if (group.userData.type === 'spelling' && group.userData.value === state.currentLetterTarget) advanceTarget('spelling');
     }
 
-    function findClosestBubbleInLane(lane) {
-      const laneX = lane * laneSpacing;
-      let best = null;
-      let bestScore = Infinity;
-
-      for (const b of bubbles) {
-        if (b.userData.popping) continue;
-        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
-        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
-        if (score < bestScore) { bestScore = score; best = b; }
-      }
-      return best;
-    }
-
-    function handlePointer(event) {
-      if (!state.playing) return;
-      if (event.target.closest && event.target.closest('#touch-lanes')) return;
-      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-
-      const activeGroups = bubbles.filter((b) => !b.userData.popping);
-      const activeMeshes = [];
-      activeGroups.forEach(g => activeMeshes.push(...g.children));
-
-      const intersects = raycaster.intersectObjects(activeMeshes);
-      if (intersects.length === 0) return;
+    // --- FREE MOVEMENT CONTROLS ---
+    function updateEvaTarget(clientX, clientY) {
+      const vec = new THREE.Vector3(
+          (clientX / window.innerWidth) * 2 - 1,
+          -(clientY / window.innerHeight) * 2 + 1,
+          0.5
+      );
+      vec.unproject(camera);
+      vec.sub(camera.position).normalize();
+      const distance = -camera.position.z / vec.z;
       
-      popBubble(intersects[0].object.parent);
+      const pos = new THREE.Vector3().copy(camera.position).add(vec.multiplyScalar(distance));
+      
+      // Clamp her within the visible screen area
+      targetEvaPos.x = Math.max(-4, Math.min(4, pos.x));
+      targetEvaPos.y = Math.max(-5, Math.min(6, pos.y));
     }
+
+    window.addEventListener('pointerdown', (e) => {
+      if (!state.playing || e.target.closest('#menu') || e.target.closest('#start-btn')) return;
+      isDragging = true;
+      updateEvaTarget(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!state.playing || !isDragging) return;
+      updateEvaTarget(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('pointerup', () => { isDragging = false; });
+    window.addEventListener('pointercancel', () => { isDragging = false; });
 
     async function requestFullscreenSafe() {
       const el = document.documentElement;
@@ -377,24 +383,34 @@
       try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait').catch(() => {}); } catch (_) {}
     }
 
-    // --- ASYNC FONT LOAD ---
     const loader = new THREE.FontLoader();
     loader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', function (font) {
         gameFont = font;
-        // Align initial spawns to the new tight lanes
-        createBubble(state.currentMathTarget, state.mathColors[0], -laneSpacing, -2, 'math');
-        createBubble(state.currentLetterTarget, state.spellColors[0], laneSpacing, -4, 'spelling');
-        updateHud(); 
+        const btn = document.getElementById('start-btn');
+        btn.textContent = 'RIDE!';
+        btn.disabled = false;
     });
 
     let startRequested = false;
-    async function startGame(event) {
-        if (event) event.preventDefault();
-        if (startRequested || state.playing) return;
+    document.getElementById('start-btn').addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (startRequested || state.playing || !gameFont) return;
         startRequested = true;
 
         await requestFullscreenSafe();
         lockPortraitSafe();
+
+        // Lock in the settings from the menu
+        state.mathLevel = parseInt(document.getElementById('math-select').value);
+        state.spellingLevel = parseInt(document.getElementById('spell-select').value);
+        state.currentMathTarget = state.mathTargets[(state.mathLevel - 1) % state.mathTargets.length];
+        state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
+
+        // Seed initial targets based on menu choice
+        createBubble(state.currentMathTarget, state.mathColors[(state.mathLevel - 1) % state.mathColors.length], -2.2, -2, 'math');
+        createBubble(state.currentLetterTarget, state.spellColors[(state.spellingLevel - 1) % state.spellColors.length], 2.2, -4, 'spelling');
+        updateHud(); 
+
         document.getElementById('splash-screen').style.display = 'none';
         
         const ui = document.getElementById('ui');
@@ -402,35 +418,17 @@
         ui.style.opacity = '0';
         setTimeout(() => { ui.style.transition = 'opacity 0.5s'; ui.style.opacity = '1'; }, 100);
 
-        document.getElementById('touch-lanes').style.display = 'grid';
         state.playing = true;
         audio.loop.play().catch(()=>{});
-    }
+    });
 
-    const touchLanes = document.getElementById('touch-lanes');
-    touchLanes.addEventListener('pointerdown', (e) => {
-      const btn = e.target.closest('.laneBtn');
-      if (!btn || !state.playing) return;
-      e.preventDefault();
-
-      const lane = Number(btn.dataset.lane);
-      state.lane = lane;
-      if (evaSprite) evaSprite.position.x = lane * laneSpacing;
-
-      const target = findClosestBubbleInLane(lane);
-      if (target) popBubble(target); 
-    }, { passive: false });
-
-    const startBtn = document.getElementById('start-btn');
-    startBtn.addEventListener('click', startGame);
-    startBtn.addEventListener('pointerdown', startGame, { passive: false });
     window.addEventListener('pointerdown', async () => {
       if (fullscreenTried) return;
       fullscreenTried = true;
       await requestFullscreenSafe();
       lockPortraitSafe();
     }, { once: true });
-    window.addEventListener('pointerdown', handlePointer);
+
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
@@ -451,7 +449,14 @@
           starMesh.rotation.y += 0.001;
           if(starMesh.position.y < -10) starMesh.position.y = 10;
 
-          if (evaSprite) evaSprite.position.y = -2 + Math.sin(Date.now()*0.003)*0.15;
+          // Free movement lerp and idle bob
+          if (evaSprite) {
+              if (isDragging) {
+                  evaSprite.position.lerp(targetEvaPos, 0.2);
+              } else {
+                  evaSprite.position.y += Math.sin(Date.now()*0.003)*0.005;
+              }
+          }
 
           for(let i = bursts.length - 1; i >= 0; i--) {
               const b = bursts[i];
@@ -483,7 +488,10 @@
                 const pulse = 1 + Math.sin(Date.now() * 0.005 + group.userData.pulseOffset) * 0.15;
                 group.userData.ringMesh.scale.set(pulse, pulse, 1);
 
-                if (group.position.y > 8) {
+                // Proximity Collision Detonation
+                if (evaSprite && evaSprite.position.distanceTo(group.position) < 1.8) {
+                    popBubble(group);
+                } else if (group.position.y > 8) {
                     scene.remove(group);
                     bubbles.splice(i, 1);
                     disposeGroup(group);
