@@ -8,18 +8,18 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
   <style>
-    /* --- PREMIUM VISUALS & MASSIVE UI --- */
+    /* --- CORE VISUALS & MASSIVE UI --- */
     * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     body { 
         overflow: hidden; 
-        background: radial-gradient(circle at 50% 100%, #4a2377 0%, #2948ff 40%, #0cd7e8 100%);
+        background: #87ceeb; /* Restored sky blue */
         font-family: 'Comic Sans MS', 'Nunito', sans-serif; 
         touch-action: none; 
     }
 
     #splash-screen {
         position: fixed; inset: 0; z-index: 100;
-        background: radial-gradient(circle at 50% 100%, #4a2377 0%, #2948ff 40%, #0cd7e8 100%);
+        background: #87ceeb url('splash.png') center/cover no-repeat; /* Restored splash.png */
         display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
         padding-bottom: max(12vh, 60px);
     }
@@ -43,14 +43,15 @@
     #hud {
       display: flex; justify-content: space-between; align-items: center; width: 95%; max-width: 800px;
       padding: 15px 30px;
-      background: rgba(255, 255, 255, 0.15); border-radius: 30px; 
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      box-shadow: 0 12px 35px rgba(0,0,0,0.3);
+      /* Darkened the glass slightly so white text pops against the bright sky blue */
+      background: rgba(0, 0, 0, 0.2); border-radius: 30px; 
+      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 12px 35px rgba(0,0,0,0.2);
     }
 
     #hud span {
-        color: #ffffff; font-weight: 900; font-size: 2.5rem; /* Massive font for progression */
+        color: #ffffff; font-weight: 900; font-size: 2.5rem; 
         text-shadow: 0 4px 10px rgba(0,0,0,0.6);
         transition: transform 0.2s cubic-bezier(0.25, 1.5, 0.5, 1), color 0.2s;
         display: inline-block;
@@ -88,16 +89,13 @@
     };
     audio.loop.loop = true;
 
-    // --- GAME LOGIC STATE (4YO VISUAL CURRICULUM) ---
+    // --- GAME LOGIC STATE ---
     const state = {
       playing: false, lane: 0, mathLevel: 1, spellingLevel: 1,
-      // 1-5 Counting -> Evens -> Simple 10s
       mathTargets: ['1', '2', '3', '4', '5', '2', '4', '6', '10', '20'], 
-      // Her Identity -> Her Dog -> Her Environment
       letterTargets: ['E', 'V', 'A', 'A', 'S', 'A', 'B', 'U', 'S'],
       currentMathTarget: '1', currentLetterTarget: 'E',
       
-      // Visual Scaling Arrays (Hex colors shift as she levels up)
       mathColors: [0x00ecec, 0x0088ff, 0x7b61ff, 0xffaa00, 0xff0055],
       spellColors: [0xff00ff, 0xff5500, 0xffcc00, 0x00ff55, 0x00ccff]
     };
@@ -111,8 +109,8 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // --- STUDIO LIGHTING ---
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.8);
+    // --- STUDIO LIGHTING (Boosted for bright sky) ---
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 0.9);
     scene.add(hemiLight);
     
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -124,8 +122,11 @@
     const bubbles = [];
     const clouds = [];
     const bursts = [];
-    const laneSpacing = 3.2;
-    const laneTolerance = 3.0;
+    
+    // TIGHTENED FOR MOBILE PORTRAIT VIEW
+    const laneSpacing = 2.2; 
+    const laneTolerance = 1.8;
+    
     let evaSprite;
     let fullscreenTried = false;
     let gameFont = null;
@@ -220,10 +221,11 @@
 
       const group = new THREE.Group();
 
+      // SCALED DOWN TEXT FOR MOBILE
       const textGeo = new THREE.TextGeometry(value.toString(), {
-        font: gameFont, size: 1.4, height: 0.3, 
+        font: gameFont, size: 0.9, height: 0.2, 
         curveSegments: 12, bevelEnabled: true,
-        bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 4
+        bevelThickness: 0.02, bevelSize: 0.015, bevelSegments: 3
       });
       
       textGeo.computeBoundingBox();
@@ -231,13 +233,14 @@
       const yOffset = -0.5 * (textGeo.boundingBox.max.y - textGeo.boundingBox.min.y);
       
       const textMat = new THREE.MeshStandardMaterial({ 
-          color: 0xffffff, metalness: 0.8, roughness: 0.1 
+          color: 0xffffff, metalness: 0.6, roughness: 0.2 
       });
       const textMesh = new THREE.Mesh(textGeo, textMat);
       textMesh.position.set(xOffset, yOffset, 0);
       group.add(textMesh);
 
-      const ringGeo = new THREE.TorusGeometry(1.8, 0.12, 16, 64);
+      // SCALED DOWN RING FOR MOBILE
+      const ringGeo = new THREE.TorusGeometry(1.2, 0.1, 16, 64);
       const ringMat = new THREE.MeshBasicMaterial({ 
         color: colorHex, transparent: true, opacity: 0.8,
         blending: THREE.AdditiveBlending 
@@ -277,9 +280,8 @@
       document.getElementById('spell-level').textContent = `Spell: ${state.spellingLevel}`;
       document.getElementById('targets').textContent = `${state.currentMathTarget} & ${state.currentLetterTarget}`;
       
-      // Pulse the specific score that just increased
       if (pulseId) pulseHUD(pulseId);
-      pulseHUD('targets'); // Always pulse the middle target string so she sees the new goal
+      pulseHUD('targets'); 
     }
 
     function advanceTarget(type) {
@@ -293,7 +295,6 @@
         state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
         pulseTarget = 'spell-level';
         
-        // Trigger theme cleanly when E-V-A is finished (Level 4)
         if (state.spellingLevel === 4) {
           if (!audio.loop.paused) audio.loop.pause();
           if (!audio.magic.paused) { audio.magic.pause(); audio.magic.currentTime = 0; }
@@ -315,7 +316,8 @@
       const level = type === 'math' ? state.mathLevel : state.spellingLevel;
       const activeColor = colorArr[(level - 1) % colorArr.length];
 
-      const newX = type === 'math' ? -3 - Math.random() * 2 : 3 + Math.random() * 2;
+      // Math exclusively on the Left (-laneSpacing), Spelling on the Right (+laneSpacing)
+      const newX = type === 'math' ? -laneSpacing : laneSpacing;
       const newY = -8; 
 
       createBubble(val, activeColor, newX, newY, type);
@@ -325,9 +327,7 @@
       if (!group || group.userData.popping) return;
       group.userData.popping = true;
 
-      // Trigger the stardust explosion using the group's current color
       createBurst(group.position.x, group.position.y, group.userData.colorHex);
-
       audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
 
       if (group.userData.type === 'math' && group.userData.value === state.currentMathTarget) advanceTarget('math');
@@ -381,9 +381,10 @@
     const loader = new THREE.FontLoader();
     loader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', function (font) {
         gameFont = font;
-        createBubble(state.currentMathTarget, state.mathColors[0], -3, -2, 'math');
-        createBubble(state.currentLetterTarget, state.spellColors[0], 3, -4, 'spelling');
-        updateHud(); // Initial draw
+        // Align initial spawns to the new tight lanes
+        createBubble(state.currentMathTarget, state.mathColors[0], -laneSpacing, -2, 'math');
+        createBubble(state.currentLetterTarget, state.spellColors[0], laneSpacing, -4, 'spelling');
+        updateHud(); 
     });
 
     let startRequested = false;
@@ -396,7 +397,6 @@
         lockPortraitSafe();
         document.getElementById('splash-screen').style.display = 'none';
         
-        // Delay HUD display slightly for smooth transition
         const ui = document.getElementById('ui');
         ui.style.display = 'flex';
         ui.style.opacity = '0';
@@ -453,14 +453,13 @@
 
           if (evaSprite) evaSprite.position.y = -2 + Math.sin(Date.now()*0.003)*0.15;
 
-          // Animate particle bursts
           for(let i = bursts.length - 1; i >= 0; i--) {
               const b = bursts[i];
               let alive = false;
               b.children.forEach(p => {
                   p.position.x += p.userData.vx;
                   p.position.y += p.userData.vy;
-                  p.userData.life -= 0.04; // Fade speed
+                  p.userData.life -= 0.04; 
                   p.material.opacity = Math.max(p.userData.life, 0);
                   const s = Math.max(p.userData.life, 0);
                   p.scale.set(s, s, s);
@@ -473,7 +472,6 @@
               }
           }
 
-          // Target Logic
           for (let i = bubbles.length - 1; i >= 0; i -= 1) {
             const group = bubbles[i];
             
