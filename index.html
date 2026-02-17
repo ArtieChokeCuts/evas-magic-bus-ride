@@ -10,7 +10,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     body { 
         overflow: hidden; 
-        background: linear-gradient(to bottom, #f0f8ff 0%, #fffafa 100%); 
+        background: #87ceeb;
         font-family: 'Comic Sans MS', Arial, sans-serif; 
         touch-action: none; 
     }
@@ -18,13 +18,14 @@
     /* --- UI --- */
     #splash-screen {
         position: fixed; inset: 0; z-index: 100;
-        background: #f0f8ff;
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: #87ceeb url('splash.png') center/cover no-repeat;
+        display: flex; align-items: flex-end; justify-content: center;
+        padding-bottom: max(8vh, 48px);
     }
-    h1 { color: #ff00ff; font-size: 3rem; margin-bottom: 20px; text-align: center; text-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
     #start-btn {
         padding: 20px 60px; font-size: 2rem; font-weight: 900; border-radius: 50px;
-        border: none; background: #ffc107; color: white; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        border: none; background: #ffc107; color: white; cursor: pointer; box-shadow: 0 8px 16px rgba(0,0,0,0.35);
+        margin: 0 auto;
     }
     
     #ui {
@@ -35,13 +36,14 @@
       background: rgba(255, 255, 255, 0.85); border-radius: 12px; color: #4f3fb2; font-weight: 700;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1); font-size: 1.2rem;
     }
+    .laneBtn { -webkit-tap-highlight-color: transparent; }
+    .laneBtn:active { background: rgba(255,255,255,0.06); }
     canvas { display: block; position: absolute; inset: 0; z-index: 5; }
   </style>
 </head>
 <body>
   <div id="splash-screen">
-      <h1>Super Eva's Magic Ride</h1>
-      <button id="start-btn">PLAY!</button>
+    <button id="start-btn">PLAY!</button>
   </div>
   
   <div id="ui">
@@ -50,6 +52,20 @@
       <span id="spell-level">Spelling Level: 1</span>
       <span id="targets">Targets: 11 & E</span>
     </div>
+  </div>
+
+  <div id="touch-lanes" style="
+    position:fixed; inset:0; z-index:11;
+    display:none;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+  ">
+    <button class="laneBtn" data-lane="-1" aria-label="Left lane"
+      style="background:transparent; border:none; outline:none;"></button>
+    <button class="laneBtn" data-lane="0" aria-label="Middle lane"
+      style="background:transparent; border:none; outline:none;"></button>
+    <button class="laneBtn" data-lane="1" aria-label="Right lane"
+      style="background:transparent; border:none; outline:none;"></button>
   </div>
 
   <script>
@@ -65,6 +81,7 @@
     // --- GAME LOGIC STATE ---
     const state = {
       playing: false,
+      lane: 0,
       mathLevel: 1, spellingLevel: 1,
       mathTargets: ['11', '9', '7', '13'],
       letterTargets: ['E', 'V', 'A', 'B'],
@@ -89,13 +106,16 @@
     const pointer = new THREE.Vector2();
     const bubbles = [];
     const clouds = [];
+    const laneSpacing = 3;
+    const laneTolerance = 2.8;
     let evaSprite;
+    let fullscreenTried = false;
 
     // --- LOAD EVA SOUL ---
     new THREE.TextureLoader().load('eva.png', (tex) => {
         const mat = new THREE.SpriteMaterial({ map: tex });
         evaSprite = new THREE.Sprite(mat);
-        evaSprite.scale.set(5, 5, 1);
+        evaSprite.scale.set(2.5, 2.5, 1);
         evaSprite.position.set(0, -2, 0); 
         scene.add(evaSprite);
     });
@@ -161,7 +181,8 @@
         state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
         
         // Easter Egg: If they hit 'A' finishing E-V-A, trigger the theme song
-        if (state.currentLetterTarget === 'B') {
+        // Never overlap the theme: only play if it's currently idle.
+        if (state.currentLetterTarget === 'B' && (audio.evaTheme.paused || audio.evaTheme.ended)) {
             audio.evaTheme.currentTime = 0;
             audio.evaTheme.play().catch(()=>{});
         }
@@ -186,17 +207,8 @@
       newBubble.rotation.y = Math.random() * Math.PI;
     }
 
-    function handlePointer(event) {
-      if (!state.playing) return;
-      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
-      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-
-      const active = bubbles.filter((b) => !b.userData.popping);
-      const intersects = raycaster.intersectObjects(active);
-      if (intersects.length === 0) return;
-
-      const hit = intersects[0].object;
+    function popBubble(hit) {
+      if (!hit || hit.userData.popping) return;
       hit.userData.popping = true;
 
       audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
@@ -205,19 +217,95 @@
       if (hit.userData.type === 'spelling' && hit.userData.value === state.currentLetterTarget) advanceTarget('spelling');
     }
 
+    function findClosestBubbleInLane(lane) {
+      const laneX = lane * laneSpacing;
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const b of bubbles) {
+        if (b.userData.popping) continue;
+        if (Math.abs(b.position.x - laneX) > laneTolerance) continue;
+        const score = Math.abs(b.position.y - (evaSprite ? evaSprite.position.y : -2));
+        if (score < bestScore) {
+          bestScore = score;
+          best = b;
+        }
+      }
+      return best;
+    }
+
+    function handlePointer(event) {
+      if (!state.playing) return;
+      if (event.target.closest && event.target.closest('#touch-lanes')) return;
+      pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const active = bubbles.filter((b) => !b.userData.popping);
+      const intersects = raycaster.intersectObjects(active);
+      if (intersects.length === 0) return;
+      popBubble(intersects[0].object);
+    }
+
+    async function requestFullscreenSafe() {
+      const el = document.documentElement;
+      try {
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } catch (_) {}
+    }
+
+    function lockPortraitSafe() {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('portrait').catch(() => {});
+        }
+      } catch (_) {}
+    }
+
     // --- INITIALIZE ---
     createBubble(state.currentMathTarget, '#7B61FF', -3, -2, 'math');
     createBubble(state.currentLetterTarget, '#FF61B6', 3, -4, 'spelling');
     updateHud();
 
-    function startGame() {
+    let startRequested = false;
+    async function startGame(event) {
+        if (event) event.preventDefault();
+        if (startRequested || state.playing) return;
+        startRequested = true;
+
+        await requestFullscreenSafe();
+        lockPortraitSafe();
         document.getElementById('splash-screen').style.display = 'none';
         document.getElementById('ui').style.display = 'block';
+        document.getElementById('touch-lanes').style.display = 'grid';
         state.playing = true;
         audio.loop.play().catch(()=>{});
     }
 
-    document.getElementById('start-btn').addEventListener('click', startGame);
+    const touchLanes = document.getElementById('touch-lanes');
+    touchLanes.addEventListener('pointerdown', (e) => {
+      const btn = e.target.closest('.laneBtn');
+      if (!btn || !state.playing) return;
+      e.preventDefault();
+
+      const lane = Number(btn.dataset.lane);
+      state.lane = lane;
+      if (evaSprite) evaSprite.position.x = lane * laneSpacing;
+
+      const target = findClosestBubbleInLane(lane);
+      if (target) popBubble(target);
+    }, { passive: false });
+
+    const startBtn = document.getElementById('start-btn');
+    startBtn.addEventListener('click', startGame);
+    startBtn.addEventListener('pointerdown', startGame, { passive: false });
+    window.addEventListener('pointerdown', async () => {
+      if (fullscreenTried) return;
+      fullscreenTried = true;
+      await requestFullscreenSafe();
+      lockPortraitSafe();
+    }, { once: true });
     window.addEventListener('pointerdown', handlePointer);
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
