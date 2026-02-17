@@ -11,8 +11,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     body { 
         overflow: hidden; 
-        background: #87ceeb; /* Default Morning Sky */
-        transition: background 2s ease-in-out; /* Smooth transition for level changes */
+        background: #87ceeb; 
+        transition: background 2s ease-in-out; 
         font-family: 'Comic Sans MS', 'Nunito', sans-serif; 
         touch-action: none; 
     }
@@ -97,7 +97,7 @@
     const audio = {
         loop: new Audio('loop.mp3'), pop: new Audio('pop.mp3'),
         magic: new Audio('magic.mp3'), evaTheme: new Audio('eva_theme.mp3'),
-        error: new Audio('pop.mp3') // You can replace this with a soft "boink" later
+        error: new Audio('pop.mp3') // Placeholder for decoy hit sound
     };
     audio.loop.loop = true;
     audio.error.volume = 0.5;
@@ -112,15 +112,14 @@
     // --- AI VOICE GUIDANCE ---
     function speakTarget(text) {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // Clear queue
+            window.speechSynthesis.cancel();
             const msg = new SpeechSynthesisUtterance("Find " + text);
-            // Try to find a friendly female/child voice if available
             const voices = window.speechSynthesis.getVoices();
             const friendlyVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Google US English'));
             if(friendlyVoice) msg.voice = friendlyVoice;
             
-            msg.rate = 0.9; // Slightly slower for comprehension
-            msg.pitch = 1.2; // Slightly higher pitch for friendly tone
+            msg.rate = 0.9; 
+            msg.pitch = 1.2; 
             window.speechSynthesis.speak(msg);
         }
     }
@@ -130,12 +129,11 @@
     document.getElementById('level-select').value = savedLevel;
 
     // --- UNIFIED CURRICULUM PIPELINE ---
-    // Added skyColor property for dynamic environments
     const curriculum = [
-        { name: "E-V-A", targets: ['E', 'V', 'A'], color: 0xff00ff, skyColor: '#87ceeb' }, // Morning
-        { name: "Alphabet", targets: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), color: 0x00ff55, skyColor: '#ff9966' }, // Sunset
-        { name: "Count 1-25", targets: Array.from({length: 25}, (_, i) => (i + 1).toString()), color: 0x0088ff, skyColor: '#4a2377' }, // Twilight
-        { name: "Word Bank", targets: ['A','S','A', 'B','U','S', 'D','O','G', 'C','A','T'], color: 0xffaa00, skyColor: '#0a0a2a' } // Night
+        { name: "E-V-A", targets: ['E', 'V', 'A'], color: 0xff00ff, skyColor: '#87ceeb' }, 
+        { name: "Alphabet", targets: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), color: 0x00ff55, skyColor: '#ff9966' }, 
+        { name: "Count 1-25", targets: Array.from({length: 25}, (_, i) => (i + 1).toString()), color: 0x0088ff, skyColor: '#4a2377' }, 
+        { name: "Word Bank", targets: ['A','S','A', 'B','U','S', 'D','O','G', 'C','A','T'], color: 0xffaa00, skyColor: '#0a0a2a' } 
     ];
 
     const state = {
@@ -273,7 +271,6 @@
       textMesh.position.set(xOffset, yOffset, 0);
       group.add(textMesh);
 
-      // Decoys get a slightly different color ring so they don't look exactly identical
       const ringColor = isTarget ? colorHex : 0xaaaaaa; 
       const ringGeo = new THREE.TorusGeometry(1.2, 0.1, 16, 64);
       const ringMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
@@ -312,7 +309,6 @@
       document.getElementById('hud-target').textContent = `Find: ${state.currentTarget}`;
       if (pulseId) pulseHUD(pulseId);
       
-      // Update environment based on level
       document.body.style.background = curLvl.skyColor;
     }
 
@@ -321,34 +317,29 @@
       const currentLevel = curriculum[state.levelIdx];
 
       if (state.targetIdx >= currentLevel.targets.length) {
-          // Level Completed
           if (!audio.loop.paused) audio.loop.pause();
           if (!audio.magic.paused) { audio.magic.pause(); audio.magic.currentTime = 0; }
           if (!audio.evaTheme.paused) { audio.evaTheme.pause(); audio.evaTheme.currentTime = 0; }
           audio.evaTheme.play().catch(()=>{});
 
           state.levelIdx++;
-          // Loop back to start if she beats the whole game
           if (state.levelIdx >= curriculum.length) state.levelIdx = 0; 
           
-          // Save Progress
           localStorage.setItem('evaBusSave', state.levelIdx);
 
           state.targetIdx = 0;
           state.currentTarget = curriculum[state.levelIdx].targets[state.targetIdx];
           
           updateHud('hud-level'); 
-          speakTarget(state.currentTarget); // Voice cue for new level
+          speakTarget(state.currentTarget); 
           
       } else {
-          // Normal Target Advance
           audio.magic.currentTime = 0; audio.magic.play().catch(()=>{});
           state.currentTarget = currentLevel.targets[state.targetIdx];
           updateHud('hud-target'); 
-          speakTarget(state.currentTarget); // Voice cue for new target
+          speakTarget(state.currentTarget); 
       }
       
-      // Clear all existing bubbles so the new set spawns fresh
       for (let i = bubbles.length - 1; i >= 0; i--) {
           scene.remove(bubbles[i]);
           disposeGroup(bubbles[i]);
@@ -357,37 +348,33 @@
       respawnWave();
     }
 
-    // --- DECOY WAVE SYSTEM ---
+    // --- DECOY WAVE SYSTEM (GRAVITY INVERTED) ---
     function respawnWave() {
         const curLvl = curriculum[state.levelIdx];
         const activeColor = curLvl.color;
         const targetVal = state.currentTarget;
 
-        // Generate Decoys
         const decoys = [];
         let attempts = 0;
         while(decoys.length < 2 && attempts < 20) {
             const randomVal = curLvl.targets[Math.floor(Math.random() * curLvl.targets.length)];
-            // Don't duplicate the target, and try not to duplicate the decoys
             if(randomVal !== targetVal && !decoys.includes(randomVal)) {
                 decoys.push(randomVal);
             }
             attempts++;
         }
         
-        // If we couldn't find enough unique decoys (e.g., Level 1 only has 3 items), just reuse the array
         if(decoys.length < 2) {
              decoys.push(curLvl.targets[0] === targetVal ? curLvl.targets[1] : curLvl.targets[0]);
              decoys.push(curLvl.targets[2] === targetVal ? curLvl.targets[1] : curLvl.targets[2]);
         }
 
-        // Setup the 3 lanes (-2.5, 0, 2.5) and shuffle them
         const lanes = [-2.5, 0, 2.5].sort(() => Math.random() - 0.5);
         
-        // Drop the 3 items
-        createBubble(targetVal, activeColor, lanes[0], -10, true);
-        createBubble(decoys[0], activeColor, lanes[1], -10, false);
-        createBubble(decoys[1], activeColor, lanes[2], -10, false);
+        // Spawn them high up (y = 10) so they drop downward toward Eva
+        createBubble(targetVal, activeColor, lanes[0], 10, true);
+        createBubble(decoys[0], activeColor, lanes[1], 10, false);
+        createBubble(decoys[1], activeColor, lanes[2], 10, false);
     }
 
 
@@ -396,15 +383,12 @@
       group.userData.popping = true;
 
       if (group.userData.isTarget) {
-          // Hit the correct target
           createBurst(group.position.x, group.position.y, group.userData.colorHex);
           audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
           advanceTarget();
       } else {
-          // Hit a decoy (Cognitive test fail)
           audio.error.currentTime = 0; audio.error.play().catch(()=>{});
-          // Shrink and disappear quickly, but DO NOT advance
-          group.userData.popScale = 0.5; // Fast shrink
+          group.userData.popScale = 0.5; 
       }
     }
 
@@ -421,7 +405,6 @@
       
       const pos = new THREE.Vector3().copy(camera.position).add(vec.multiplyScalar(distance));
       
-      // Clamp her within the visible screen area
       targetEvaPos.x = Math.max(-4, Math.min(4, pos.x));
       targetEvaPos.y = Math.max(-5, Math.min(6, pos.y));
     }
@@ -469,16 +452,14 @@
         await requestFullscreenSafe();
         lockPortraitSafe();
 
-        // Lock in settings from menu (or localStorage)
         state.levelIdx = parseInt(document.getElementById('level-select').value);
         state.targetIdx = 0;
         state.currentTarget = curriculum[state.levelIdx].targets[0];
 
-        // Seed initial wave of 3
         respawnWave();
         
         updateHud(); 
-        speakTarget(state.currentTarget); // Initial Voice Cue
+        speakTarget(state.currentTarget); 
 
         document.getElementById('splash-screen').style.display = 'none';
         
@@ -491,7 +472,6 @@
         audio.loop.play().catch(()=>{});
     });
 
-    // Make sure voice init works on iOS/Chrome mobile
     window.addEventListener('pointerdown', async () => {
       if (fullscreenTried) return;
       fullscreenTried = true;
@@ -524,7 +504,6 @@
           starMesh.rotation.y += 0.001;
           if(starMesh.position.y < -10) starMesh.position.y = 10;
 
-          // Free movement lerp and idle bob
           if (evaSprite) {
               if (isDragging) {
                   evaSprite.position.lerp(targetEvaPos, 0.2);
@@ -558,18 +537,17 @@
             const group = bubbles[i];
             
             if (!group.userData.popping) {
-                group.position.y += group.userData.speed;
+                // GRAVITY INVERTED: Subtract speed to fall downward
+                group.position.y -= group.userData.speed;
                 group.rotation.y += 0.015;
                 group.rotation.x = Math.sin(Date.now()*0.002) * 0.2;
                 
                 const pulse = 1 + Math.sin(Date.now() * 0.005 + group.userData.pulseOffset) * 0.15;
                 group.userData.ringMesh.scale.set(pulse, pulse, 1);
 
-                // Proximity Collision Detonation
                 if (evaSprite && evaSprite.position.distanceTo(group.position) < 1.8) {
                     popBubble(group);
-                } else if (group.position.y > 8) {
-                    // If ANY bubble floats past the screen, we need to respawn the wave
+                } else if (group.position.y < -8) { // Despawn when they drop below the screen
                     scene.remove(group);
                     bubbles.splice(i, 1);
                     disposeGroup(group);
@@ -588,7 +566,6 @@
             }
           }
           
-          // If the bubbles floated away without being popped, send a new wave
           if (needNewWave && bubbles.length === 0) {
               respawnWave();
           }
