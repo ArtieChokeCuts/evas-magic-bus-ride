@@ -11,7 +11,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
     body { 
         overflow: hidden; 
-        background: #87ceeb; 
+        background: #87ceeb; /* Default Morning Sky */
+        transition: background 2s ease-in-out; /* Smooth transition for level changes */
         font-family: 'Comic Sans MS', 'Nunito', sans-serif; 
         touch-action: none; 
     }
@@ -53,7 +54,7 @@
     }
     
     #hud {
-      display: flex; justify-content: space-between; align-items: center; width: 95%; max-width: 800px;
+      display: flex; justify-content: center; gap: 30px; align-items: center; width: 95%; max-width: 800px;
       padding: 15px 30px;
       background: rgba(0, 0, 0, 0.2); border-radius: 30px; 
       backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -62,7 +63,7 @@
     }
 
     #hud span {
-        color: #ffffff; font-weight: 900; font-size: 2.5rem; 
+        color: #ffffff; font-weight: 900; font-size: 2.6rem; 
         text-shadow: 0 4px 10px rgba(0,0,0,0.6);
         transition: transform 0.2s cubic-bezier(0.25, 1.5, 0.5, 1), color 0.2s;
         display: inline-block;
@@ -74,14 +75,11 @@
 <body>
   <div id="splash-screen">
     <div id="menu">
-      <select id="math-select">
-        <option value="1">Count: 1 - 10</option>
-        <option value="11">Count: 11 - 25</option>
-      </select>
-      <select id="spell-select">
-        <option value="1">Spell: E-V-A</option>
-        <option value="4">Spell: Alphabet</option>
-        <option value="30">Spell: Word Bank</option>
+      <select id="level-select">
+        <option value="0">Level 1: Spell E-V-A</option>
+        <option value="1">Level 2: Alphabet</option>
+        <option value="2">Level 3: Count 1-25</option>
+        <option value="3">Level 4: Word Bank</option>
       </select>
     </div>
     <button id="start-btn" disabled>LOADING...</button>
@@ -89,9 +87,8 @@
   
   <div id="ui" style="display:none;">
     <div id="hud">
-      <span id="math-level">Math: 1</span>
-      <span id="targets">-</span>
-      <span id="spell-level">Spell: 1</span>
+      <span id="hud-level">Level 1: E-V-A</span>
+      <span id="hud-target">Find: E</span>
     </div>
   </div>
 
@@ -99,9 +96,11 @@
     // --- AUDIO SETUP ---
     const audio = {
         loop: new Audio('loop.mp3'), pop: new Audio('pop.mp3'),
-        magic: new Audio('magic.mp3'), evaTheme: new Audio('eva_theme.mp3')
+        magic: new Audio('magic.mp3'), evaTheme: new Audio('eva_theme.mp3'),
+        error: new Audio('pop.mp3') // You can replace this with a soft "boink" later
     };
     audio.loop.loop = true;
+    audio.error.volume = 0.5;
 
     audio.evaTheme.addEventListener('ended', () => {
         if (state.playing) {
@@ -110,18 +109,40 @@
         }
     });
 
-    // --- GAME LOGIC STATE ---
+    // --- AI VOICE GUIDANCE ---
+    function speakTarget(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Clear queue
+            const msg = new SpeechSynthesisUtterance("Find " + text);
+            // Try to find a friendly female/child voice if available
+            const voices = window.speechSynthesis.getVoices();
+            const friendlyVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Google US English'));
+            if(friendlyVoice) msg.voice = friendlyVoice;
+            
+            msg.rate = 0.9; // Slightly slower for comprehension
+            msg.pitch = 1.2; // Slightly higher pitch for friendly tone
+            window.speechSynthesis.speak(msg);
+        }
+    }
+
+    // Load saved progress
+    const savedLevel = localStorage.getItem('evaBusSave') || 0;
+    document.getElementById('level-select').value = savedLevel;
+
+    // --- UNIFIED CURRICULUM PIPELINE ---
+    // Added skyColor property for dynamic environments
+    const curriculum = [
+        { name: "E-V-A", targets: ['E', 'V', 'A'], color: 0xff00ff, skyColor: '#87ceeb' }, // Morning
+        { name: "Alphabet", targets: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), color: 0x00ff55, skyColor: '#ff9966' }, // Sunset
+        { name: "Count 1-25", targets: Array.from({length: 25}, (_, i) => (i + 1).toString()), color: 0x0088ff, skyColor: '#4a2377' }, // Twilight
+        { name: "Word Bank", targets: ['A','S','A', 'B','U','S', 'D','O','G', 'C','A','T'], color: 0xffaa00, skyColor: '#0a0a2a' } // Night
+    ];
+
     const state = {
-      playing: false, mathLevel: 1, spellingLevel: 1,
-      mathTargets: Array.from({length: 25}, (_, i) => (i + 1).toString()), 
-      letterTargets: [
-          'E', 'V', 'A', 
-          ...('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')), 
-          'A', 'S', 'A', 'B', 'U', 'S', 'D', 'O', 'G', 'C', 'A', 'T'
-      ],
-      currentMathTarget: '1', currentLetterTarget: 'E',
-      mathColors: [0x00ecec, 0x0088ff, 0x7b61ff, 0xffaa00, 0xff0055],
-      spellColors: [0xff00ff, 0xff5500, 0xffcc00, 0x00ff55, 0x00ccff]
+      playing: false,
+      levelIdx: parseInt(savedLevel),
+      targetIdx: 0,
+      currentTarget: 'E'
     };
 
     // --- ENGINE SETUP ---
@@ -233,7 +254,7 @@
     }
     createMovingClouds();
 
-    function createBubble(value, colorHex, x, y, type) {
+    function createBubble(value, colorHex, x, y, isTarget) {
       if (!gameFont) return null;
       const group = new THREE.Group();
 
@@ -252,8 +273,10 @@
       textMesh.position.set(xOffset, yOffset, 0);
       group.add(textMesh);
 
+      // Decoys get a slightly different color ring so they don't look exactly identical
+      const ringColor = isTarget ? colorHex : 0xaaaaaa; 
       const ringGeo = new THREE.TorusGeometry(1.2, 0.1, 16, 64);
-      const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+      const ringMat = new THREE.MeshBasicMaterial({ color: ringColor, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       group.add(ringMesh);
 
@@ -262,7 +285,7 @@
       group.rotation.y = 0.15;
 
       group.userData = { 
-        value, type, colorHex, popScale: 1, popping: false, 
+        value, isTarget, colorHex, popScale: 1, popping: false, 
         speed: 0.025 + Math.random()*0.02,
         pulseOffset: Math.random() * Math.PI * 2,
         ringMesh: ringMesh 
@@ -284,59 +307,105 @@
     }
 
     function updateHud(pulseId = null) {
-      document.getElementById('math-level').textContent = `Math: ${state.mathLevel}`;
-      document.getElementById('spell-level').textContent = `Spell: ${state.spellingLevel}`;
-      document.getElementById('targets').textContent = `${state.currentMathTarget} & ${state.currentLetterTarget}`;
+      const curLvl = curriculum[state.levelIdx];
+      document.getElementById('hud-level').textContent = `Level ${state.levelIdx + 1}: ${curLvl.name}`;
+      document.getElementById('hud-target').textContent = `Find: ${state.currentTarget}`;
       if (pulseId) pulseHUD(pulseId);
-      pulseHUD('targets'); 
+      
+      // Update environment based on level
+      document.body.style.background = curLvl.skyColor;
     }
 
-    function advanceTarget(type) {
-      let pulseTarget = null;
-      if (type === 'math') {
-        state.mathLevel += 1;
-        state.currentMathTarget = state.mathTargets[(state.mathLevel - 1) % state.mathTargets.length];
-        pulseTarget = 'math-level';
-      } else {
-        state.spellingLevel += 1;
-        state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
-        pulseTarget = 'spell-level';
-        
-        if (state.spellingLevel === 4) {
+    function advanceTarget() {
+      state.targetIdx++;
+      const currentLevel = curriculum[state.levelIdx];
+
+      if (state.targetIdx >= currentLevel.targets.length) {
+          // Level Completed
           if (!audio.loop.paused) audio.loop.pause();
           if (!audio.magic.paused) { audio.magic.pause(); audio.magic.currentTime = 0; }
           if (!audio.evaTheme.paused) { audio.evaTheme.pause(); audio.evaTheme.currentTime = 0; }
           audio.evaTheme.play().catch(()=>{});
-          updateHud(pulseTarget);
-          return; 
-        }
+
+          state.levelIdx++;
+          // Loop back to start if she beats the whole game
+          if (state.levelIdx >= curriculum.length) state.levelIdx = 0; 
+          
+          // Save Progress
+          localStorage.setItem('evaBusSave', state.levelIdx);
+
+          state.targetIdx = 0;
+          state.currentTarget = curriculum[state.levelIdx].targets[state.targetIdx];
+          
+          updateHud('hud-level'); 
+          speakTarget(state.currentTarget); // Voice cue for new level
+          
+      } else {
+          // Normal Target Advance
+          audio.magic.currentTime = 0; audio.magic.play().catch(()=>{});
+          state.currentTarget = currentLevel.targets[state.targetIdx];
+          updateHud('hud-target'); 
+          speakTarget(state.currentTarget); // Voice cue for new target
       }
-      audio.magic.currentTime = 0; audio.magic.play().catch(()=>{});
-      updateHud(pulseTarget);
+      
+      // Clear all existing bubbles so the new set spawns fresh
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+          scene.remove(bubbles[i]);
+          disposeGroup(bubbles[i]);
+          bubbles.splice(i, 1);
+      }
+      respawnWave();
     }
 
-    function respawnBubble(group) {
-      const type = group.userData.type;
-      const val = type === 'math' ? state.currentMathTarget : state.currentLetterTarget;
-      const colorArr = type === 'math' ? state.mathColors : state.spellColors;
-      const level = type === 'math' ? state.mathLevel : state.spellingLevel;
-      const activeColor = colorArr[(level - 1) % colorArr.length];
+    // --- DECOY WAVE SYSTEM ---
+    function respawnWave() {
+        const curLvl = curriculum[state.levelIdx];
+        const activeColor = curLvl.color;
+        const targetVal = state.currentTarget;
 
-      const newX = type === 'math' ? -2.2 - Math.random() * 1.5 : 2.2 + Math.random() * 1.5;
-      const newY = -8; 
+        // Generate Decoys
+        const decoys = [];
+        let attempts = 0;
+        while(decoys.length < 2 && attempts < 20) {
+            const randomVal = curLvl.targets[Math.floor(Math.random() * curLvl.targets.length)];
+            // Don't duplicate the target, and try not to duplicate the decoys
+            if(randomVal !== targetVal && !decoys.includes(randomVal)) {
+                decoys.push(randomVal);
+            }
+            attempts++;
+        }
+        
+        // If we couldn't find enough unique decoys (e.g., Level 1 only has 3 items), just reuse the array
+        if(decoys.length < 2) {
+             decoys.push(curLvl.targets[0] === targetVal ? curLvl.targets[1] : curLvl.targets[0]);
+             decoys.push(curLvl.targets[2] === targetVal ? curLvl.targets[1] : curLvl.targets[2]);
+        }
 
-      createBubble(val, activeColor, newX, newY, type);
+        // Setup the 3 lanes (-2.5, 0, 2.5) and shuffle them
+        const lanes = [-2.5, 0, 2.5].sort(() => Math.random() - 0.5);
+        
+        // Drop the 3 items
+        createBubble(targetVal, activeColor, lanes[0], -10, true);
+        createBubble(decoys[0], activeColor, lanes[1], -10, false);
+        createBubble(decoys[1], activeColor, lanes[2], -10, false);
     }
+
 
     function popBubble(group) {
       if (!group || group.userData.popping) return;
       group.userData.popping = true;
 
-      createBurst(group.position.x, group.position.y, group.userData.colorHex);
-      audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
-
-      if (group.userData.type === 'math' && group.userData.value === state.currentMathTarget) advanceTarget('math');
-      if (group.userData.type === 'spelling' && group.userData.value === state.currentLetterTarget) advanceTarget('spelling');
+      if (group.userData.isTarget) {
+          // Hit the correct target
+          createBurst(group.position.x, group.position.y, group.userData.colorHex);
+          audio.pop.currentTime = 0; audio.pop.play().catch(()=>{});
+          advanceTarget();
+      } else {
+          // Hit a decoy (Cognitive test fail)
+          audio.error.currentTime = 0; audio.error.play().catch(()=>{});
+          // Shrink and disappear quickly, but DO NOT advance
+          group.userData.popScale = 0.5; // Fast shrink
+      }
     }
 
     // --- FREE MOVEMENT CONTROLS ---
@@ -400,16 +469,16 @@
         await requestFullscreenSafe();
         lockPortraitSafe();
 
-        // Lock in the settings from the menu
-        state.mathLevel = parseInt(document.getElementById('math-select').value);
-        state.spellingLevel = parseInt(document.getElementById('spell-select').value);
-        state.currentMathTarget = state.mathTargets[(state.mathLevel - 1) % state.mathTargets.length];
-        state.currentLetterTarget = state.letterTargets[(state.spellingLevel - 1) % state.letterTargets.length];
+        // Lock in settings from menu (or localStorage)
+        state.levelIdx = parseInt(document.getElementById('level-select').value);
+        state.targetIdx = 0;
+        state.currentTarget = curriculum[state.levelIdx].targets[0];
 
-        // Seed initial targets based on menu choice
-        createBubble(state.currentMathTarget, state.mathColors[(state.mathLevel - 1) % state.mathColors.length], -2.2, -2, 'math');
-        createBubble(state.currentLetterTarget, state.spellColors[(state.spellingLevel - 1) % state.spellColors.length], 2.2, -4, 'spelling');
+        // Seed initial wave of 3
+        respawnWave();
+        
         updateHud(); 
+        speakTarget(state.currentTarget); // Initial Voice Cue
 
         document.getElementById('splash-screen').style.display = 'none';
         
@@ -422,9 +491,15 @@
         audio.loop.play().catch(()=>{});
     });
 
+    // Make sure voice init works on iOS/Chrome mobile
     window.addEventListener('pointerdown', async () => {
       if (fullscreenTried) return;
       fullscreenTried = true;
+      if ('speechSynthesis' in window) {
+          const msg = new SpeechSynthesisUtterance("");
+          msg.volume = 0;
+          window.speechSynthesis.speak(msg);
+      }
       await requestFullscreenSafe();
       lockPortraitSafe();
     }, { once: true });
@@ -477,6 +552,8 @@
               }
           }
 
+          let needNewWave = false;
+
           for (let i = bubbles.length - 1; i >= 0; i -= 1) {
             const group = bubbles[i];
             
@@ -492,10 +569,11 @@
                 if (evaSprite && evaSprite.position.distanceTo(group.position) < 1.8) {
                     popBubble(group);
                 } else if (group.position.y > 8) {
+                    // If ANY bubble floats past the screen, we need to respawn the wave
                     scene.remove(group);
                     bubbles.splice(i, 1);
                     disposeGroup(group);
-                    respawnBubble(group);
+                    needNewWave = true;
                 }
             } else {
               group.userData.popScale -= 0.15; 
@@ -506,9 +584,13 @@
                 scene.remove(group);
                 bubbles.splice(i, 1);
                 disposeGroup(group);
-                respawnBubble(group);
               }
             }
+          }
+          
+          // If the bubbles floated away without being popped, send a new wave
+          if (needNewWave && bubbles.length === 0) {
+              respawnWave();
           }
       }
       renderer.render(scene, camera);
